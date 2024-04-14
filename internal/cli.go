@@ -8,8 +8,12 @@ import (
 	"strconv"
 )
 
-type CLI struct {
-	BC *Blockchain
+type CLI struct{}
+
+func (cli *CLI) createBlockchain(address string) {
+	bc := NewBlockchain(address)
+	bc.DB.Close()
+	fmt.Println("Done!")
 }
 
 func (cli *CLI) printUsage() {
@@ -60,7 +64,7 @@ func (cli *CLI) Run() {
 			addBlockCmd.Usage()
 			os.Exit(1)
 		}
-		cli.addBlock(*addBlockData)
+		//cli.addBlock(*addBlockData)
 	}
 
 	if printChainCmd.Parsed() {
@@ -68,19 +72,17 @@ func (cli *CLI) Run() {
 	}
 }
 
-func (cli *CLI) addBlock(data string) {
-	cli.BC.AddBlock(data)
-	fmt.Println("Success!")
-}
-
 func (cli *CLI) printChain() {
-	bci := cli.BC.Iterator()
+	// TODO: Fix this
+	bc := NewBlockchain("")
+	defer bc.DB.Close()
+
+	bci := bc.Iterator()
 
 	for {
 		block := bci.Next()
 
 		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
-		fmt.Printf("Data: %s\n", block.Data)
 		fmt.Printf("Hash: %x\n", block.Hash)
 		pow := NewProofOfWork(block)
 		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))

@@ -10,5 +10,5 @@ Print blockchain:
 
 Add block:
 ```shell
-./blockchain addblock -data "Send 2 BTC to Taras"
+./blockchain addblock -data "Send 2 BTC to Ivan"
 ```
