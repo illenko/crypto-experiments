@@ -8,7 +8,12 @@ Print blockchain:
 ./blockchain printchain
 ```
 
-Add block:
+Sent:
 ```shell
-./blockchain addblock -data "Send 2 BTC to Ivan"
+./blockchain send -from Ivan -to Pedro -amount 2
+```
+
+Get balance:
+```shell
+./blockchain getbalance -address Ivan
 ```
