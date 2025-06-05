@@ -1,6 +1,6 @@
 module github.com/illenko/blockchain
 
-go 1.22.0
+go 1.24.0
 
 require go.etcd.io/bbolt v1.3.9
 
