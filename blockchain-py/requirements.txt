@@ -1,1 +1,2 @@
 Flask~=2.2.5
+structlog~=23.1.0
