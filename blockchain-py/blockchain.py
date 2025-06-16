@@ -1,13 +1,17 @@
 import hashlib
 import json
 from time import time
+import os
+import requests
 import structlog
 from typing import Dict, List, Optional, Any
 from uuid import uuid4
 from flask import Flask, jsonify, request
-
+from urllib.parse import urlparse
 
 logger = structlog.get_logger()
+PORT = int(os.getenv('BLOCKCHAIN_PORT', 8080))
+HOST = os.getenv('BLOCKCHAIN_HOST', '0.0.0.0')
 
 class Blockchain:
     DIFFICULTY = "0000"
@@ -15,12 +19,22 @@ class Blockchain:
     def __init__(self):
         self.current_transactions: List[Dict[str, Any]] = []
         self.chain: List[Dict[str, Any]] = []
+        self.nodes = set()
         logger.info("🔗 Initializing blockchain")
         self._create_genesis_block()
 
     def _create_genesis_block(self) -> None:
         logger.info("⚡ Creating genesis block")
         self.new_block(proof=100, previous_hash="0" * 64)
+
+    def register_node(self, address: str) -> None:
+        parsed_url = urlparse(address)
+        if parsed_url.netloc:
+            self.nodes.add(parsed_url.netloc)
+            logger.info(f"📡 Registered new node: {parsed_url.netloc}")
+        else:
+            logger.error(f"⚠️ Invalid node address format: {address}")
+            raise ValueError("Invalid node address")
 
     def new_block(self, proof: int, previous_hash: Optional[str] = None) -> Dict[str, Any]:
         block = {
@@ -87,10 +101,10 @@ class Blockchain:
             return self.chain[index]
         return None
 
-    def is_chain_valid(self) -> bool:
-        for i in range(1, len(self.chain)):
-            current_block = self.chain[i]
-            previous_block = self.chain[i - 1]
+    def is_valid_chain(self, chain: List[Dict[str, Any]]) -> bool:
+        for i in range(1, len(chain)):
+            current_block = chain[i]
+            previous_block = chain[i - 1]
 
             if current_block['previous_hash'] != self.hash(previous_block):
                 logger.error(f"❌ Invalid previous hash at block {current_block['index']}")
@@ -105,13 +119,41 @@ class Blockchain:
                 logger.error(f"❌ Invalid block hash at block {current_block['index']}")
                 return False
 
-        logger.info("✅ Chain validation successful")
+        logger.info("✅ External chain validation successful")
         return True
+
+    def resolve_conflicts(self) -> bool:
+        max_length = len(self.chain)
+        new_chain = None
+
+        logger.info("🔄 Starting chain resolution with network nodes")
+        for node in self.nodes:
+            try:
+                response = requests.get(f'http://{node}/chain')
+                if response.status_code == 200:
+                    length = response.json()['length']
+                    chain = response.json()['chain']
+
+                    if length > max_length and self.is_valid_chain(chain):
+                        max_length = length
+                        new_chain = chain
+                        logger.info(f"📡 Found longer valid chain from {node}, length: {length}")
+            except requests.RequestException as e:
+                logger.error(f"❌ Failed to connect to node {node}")
+
+        if new_chain:
+            self.chain = new_chain
+            logger.info(f"🔁 Chain replaced with longer chain of length {len(new_chain)}")
+            return True
+
+        logger.info("✅ Current chain is up to date")
+        return False
 
 
 app = Flask(__name__)
 node_identifier = str(uuid4()).replace('-', '')
 blockchain = Blockchain()
+
 
 @app.route('/mine', methods=['GET'])
 def mine():
@@ -136,6 +178,7 @@ def mine():
     logger.info(f"✨ Successfully mined block {block['index']}")
     return jsonify(response), 200
 
+
 @app.route('/transactions', methods=['POST'])
 def new_transaction():
     values = request.get_json()
@@ -154,6 +197,7 @@ def new_transaction():
     response = {'message': f'Transaction will be added to Block {index}'}
     return jsonify(response), 201
 
+
 @app.route('/transactions', methods=['GET'])
 def get_pending_transactions():
     pending = blockchain.get_pending_transactions()
@@ -165,14 +209,16 @@ def get_pending_transactions():
     logger.info(f"📋 Retrieved {len(pending)} pending transactions")
     return jsonify(response), 200
 
+
 @app.route('/chain', methods=['GET'])
 def full_chain():
     response = {
         'chain': blockchain.chain,
         'length': len(blockchain.chain),
-        'valid': blockchain.is_chain_valid()
+        'valid': blockchain.is_valid_chain(blockchain.chain)
     }
     return jsonify(response), 200
+
 
 @app.route('/block/<int:index>', methods=['GET'])
 def get_block(index):
@@ -184,16 +230,70 @@ def get_block(index):
     logger.info(f"📦 Retrieved block {index}")
     return jsonify(block), 200
 
-@app.route('/validate', methods=['GET'])
-def validate_chain():
-    is_valid = blockchain.is_chain_valid()
+
+@app.route('/nodes/register', methods=['POST'])
+def register_nodes():
+    values = request.get_json()
+    nodes = values.get('nodes')
+
+    if not nodes:
+        logger.error("⚠️ No nodes provided for registration")
+        return jsonify({'error': 'Please supply a valid list of nodes'}), 400
+
+    registered = []
+    failed = []
+
+    for node in nodes:
+        try:
+            blockchain.register_node(node)
+            registered.append(node)
+        except ValueError:
+            failed.append(node)
+
     response = {
-        'valid': is_valid,
-        'chain_length': len(blockchain.chain)
+        'message': '🌐 Nodes registration processed',
+        'registered_nodes': registered,
+        'total_nodes': list(blockchain.nodes),
+        'failed_nodes': failed
     }
-    logger.info(f"🔍 Chain validation completed: {'valid' if is_valid else 'invalid'}")
+
+    if failed:
+        logger.warning(f"⚠️ Failed to register {len(failed)} nodes")
+        return jsonify(response), 207  # Partial Content
+
+    logger.info(f"✅ Successfully registered {len(registered)} new nodes")
+    return jsonify(response), 201
+
+
+@app.route('/nodes/resolve', methods=['GET'])
+def consensus():
+    logger.info("🔄 Starting consensus resolution")
+    replaced = blockchain.resolve_conflicts()
+
+    response = {
+        'message': '🔄 Chain replaced with network consensus' if replaced else '✅ Local chain is authoritative',
+        'chain_replaced': replaced,
+        'chain_length': len(blockchain.chain),
+        'chain': blockchain.chain
+    }
+
+    logger.info(
+        "📊 Consensus resolution completed",
+        chain_replaced=replaced,
+        chain_length=len(blockchain.chain)
+    )
     return jsonify(response), 200
 
+
 if __name__ == '__main__':
-    logger.info(f"🚀 Starting blockchain node {node_identifier}")
-    app.run(host='0.0.0.0', port=8080)
+    logger.info(
+        "🚀 Starting blockchain node",
+        host=HOST,
+        port=PORT
+    )
+    app.run(
+        host=HOST,
+        port=PORT,
+        debug=os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    )
+
