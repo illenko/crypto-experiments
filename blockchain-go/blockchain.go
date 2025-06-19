@@ -5,38 +5,44 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
 type Blockchain struct {
-	chain               []*Block
-	pendingTransactions []*Transaction
+	Chain               []*Block       `json:"chain"`
+	PendingTransactions []*Transaction `json:"pendingTransactions"`
 }
 
 func NewBlockchain() *Blockchain {
 	bc := &Blockchain{
-		chain:               make([]*Block, 0),
-		pendingTransactions: make([]*Transaction, 0),
+		Chain:               make([]*Block, 0),
+		PendingTransactions: make([]*Transaction, 0),
 	}
-	bc.NewBlock("") // Create genesis block
-	return bc
+	fmt.Println("🌱 Creating new blockchain...")
+	bc.Chain = append(bc.Chain, createGenesisBlock())
+	fmt.Println("⛓️ Genesis block created!")
 
+	return bc
 }
 
-func (b *Blockchain) NewBlock(previousHash string) *Block {
+func createGenesisBlock() *Block {
 	block := &Block{
-		Index:        len(b.chain),
+		Index:        0,
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Transactions: b.pendingTransactions,
-		PreviousHash: previousHash,
+		Transactions: make([]*Transaction, 0),
+		PreviousHash: strings.Repeat("0", 64),
+		Nonce:        0,
 	}
 
-	block.Hash = Hash(block)
+	for {
+		block.Hash = Hash(block)
+		if strings.HasPrefix(block.Hash, strings.Repeat("0", DIFFICULTY)) {
+			break
+		}
+		block.Nonce++
+	}
 
-	b.pendingTransactions = make([]*Transaction, 0)
-	b.chain = append(b.chain, block)
-
-	fmt.Printf("Created block %d\n", block.Index)
 	return block
 }
 
@@ -47,19 +53,55 @@ func Hash(block *Block) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func (b *Blockchain) LastBlock() *Block {
-	if len(b.chain) == 0 {
-		return nil
-	}
-	return b.chain[len(b.chain)-1]
-}
-
 func (b *Blockchain) NewTransaction(sender, recipient string, amount float64) *Transaction {
 	transaction := &Transaction{
 		Sender:    sender,
 		Recipient: recipient,
 		Amount:    amount,
 	}
-	b.pendingTransactions = append(b.pendingTransactions, transaction)
+	b.PendingTransactions = append(b.PendingTransactions, transaction)
+	fmt.Printf("💸 New transaction: %s -> %s: %.2f\n", sender, recipient, amount)
 	return transaction
+}
+
+func (b *Blockchain) String() string {
+	bytes, _ := json.MarshalIndent(b, "", "  ")
+	return string(bytes)
+}
+
+func (b *Blockchain) SubmitBlock(block *Block) error {
+	if !b.isValidNewBlock(block) {
+		fmt.Println("❌ Invalid block rejected")
+		return fmt.Errorf("invalid block submitted")
+	}
+
+	b.Chain = append(b.Chain, block)
+	b.PendingTransactions = make([]*Transaction, 0)
+
+	fmt.Printf("✅ Block #%d accepted with hash: %s\n", block.Index, block.Hash[:8])
+	return nil
+}
+
+func (b *Blockchain) isValidNewBlock(block *Block) bool {
+	if !isValidProof(block) {
+		return false
+	}
+
+	if block.Index != len(b.Chain) {
+		return false
+	}
+
+	lastBlock := b.LastBlock()
+	if lastBlock != nil && block.PreviousHash != lastBlock.Hash {
+		return false
+	}
+
+	return true
+}
+
+func (b *Blockchain) LastBlock() *Block {
+	if len(b.Chain) == 0 {
+		return nil
+	}
+	return b.Chain[len(b.Chain)-1]
 }
