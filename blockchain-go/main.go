@@ -5,13 +5,24 @@ import "fmt"
 func main() {
 	bc := NewBlockchain()
 
+	bc.UTXOSet["Alice"] = []*UTXO{
+		{
+			TxID:     "genesis",
+			OutIndex: 0,
+			Output: &TxOutput{
+				Value:   100.0,
+				Address: "Alice",
+			},
+		},
+	}
+
 	miner := NewMiner("miner1")
 
-	bc.NewTransaction("Alice", "Bob", 50.0)
-
-	newBlock := miner.Mine(bc)
-	bc.Chain = append(bc.Chain, newBlock)
-	bc.PendingTransactions = make([]*Transaction, 0)
+	tx := bc.CreateTransaction("Alice", "Bob", 50.0)
+	if tx != nil {
+		newBlock := miner.Mine(bc)
+		bc.SubmitBlock(newBlock)
+	}
 
 	fmt.Println(bc)
 }
