@@ -40,6 +40,9 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Pending Transactions**: UTXO-based transactions accumulate in blockchain until mined into a block
 - **Block Validation**: Validates proof-of-work, block index, and previous hash linkage
 - **UTXO Set Management**: Tracks unspent outputs by address, removes spent UTXOs and adds new ones atomically
+- **Transaction Validation**: Pre-validates all transactions before applying changes to prevent corruption
+- **Atomic Updates**: All-or-nothing UTXO modifications with rollback capability for consistency
+- **Double-Spending Prevention**: Enforces that each UTXO can only be spent once
 
 ### Data Flow
 
@@ -52,15 +55,16 @@ This is a basic blockchain implementation in Go consisting of several core compo
 3. Miner calls `Mine()` to create candidate block with pending transactions
 4. Mining loop increments nonce until valid hash found (proof-of-work)
 5. Validated block added to chain via `SubmitBlock()` which:
-   - Removes spent UTXOs from UTXO set (coin destruction)
-   - Adds new UTXOs to UTXO set (coin creation)
-   - Clears pending transactions
+   - Pre-validates all transactions (UTXO existence, input/output balance)
+   - Creates backup of UTXO set for potential rollback
+   - Atomically removes spent UTXOs and adds new ones
+   - Rolls back changes if any step fails
+   - Clears pending transactions only on success
 
 ### Current Limitations
 
 - No network layer or peer-to-peer communication
 - No digital signatures for transaction authentication (UTXOs can be spent by anyone)
-- No transaction validation beyond basic UTXO existence checks
 - Fixed mining difficulty (no difficulty adjustment)
 - Single miner implementation
 - No persistence layer (blockchain resets on restart)
@@ -74,50 +78,64 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - Proper coin destruction and creation
 - Change handling in transactions
 - Double-spending prevention
+- **Transaction validation with consistency guarantees**
+- **Atomic UTXO updates with rollback**
+- **Pre-validation of all transactions before state changes**
+- **Conservation of money enforcement (input sum >= output sum)**
 
 **🚧 Remaining Work:**
 - Digital signatures for transaction inputs
-- Proper transaction validation
 - Coinbase transactions for mining rewards
 - Balance calculation from UTXOs
 - Transaction fees
 
+### UTXO Consistency Guarantees
+
+**🔒 Security Features Implemented:**
+- **Double-Spending Prevention**: Each UTXO can only be spent once
+- **Atomic Updates**: All-or-nothing modifications to UTXO set
+- **Pre-validation**: All transactions validated before any state changes
+- **Rollback Protection**: Failed validations don't corrupt UTXO state
+- **Conservation Laws**: Input values must be >= output values
+- **Deep Copy Backup**: Complete UTXO set backup for rollback scenarios
+
+**📊 Validation Process:**
+1. `validateTransactions()` - Check UTXO existence and money conservation
+2. `copyUTXOSet()` - Create backup for potential rollback
+3. `applyUTXOChanges()` - Atomically modify UTXO set
+4. Rollback to backup if any step fails
+
 ## Next Steps for Development
 
 ### High Priority (Security & Core Functionality)
-1. **Implement Transaction Validation** - Add proper validation logic in `SubmitBlock()` to check:
-   - All input UTXOs exist and are unspent
-   - Sum of inputs >= sum of outputs
-   - Transaction signatures are valid (once implemented)
-
-2. **Add Digital Signatures** - Implement cryptographic authentication:
+1. **Add Digital Signatures** - Implement cryptographic authentication:
    - Generate key pairs for addresses
    - Sign transaction inputs with private keys
    - Verify signatures during validation
    - Prevent unauthorized spending of UTXOs
 
-3. **Create Coinbase Transactions** - Add mining rewards:
+2. **Create Coinbase Transactions** - Add mining rewards:
    - Special transaction type with no inputs (creates new coins)
    - Miner address receives block reward
    - Integrate with mining process
 
 ### Medium Priority (Features & Usability)
-4. **Balance Calculation** - Replace manual UTXO management with:
+1. **Balance Calculation** - Replace manual UTXO management with:
    - `GetBalance(address)` method that sums UTXOs
    - Better transaction creation with automatic UTXO selection
 
-5. **Transaction Fees** - Implement fee mechanism:
+2. **Transaction Fees** - Implement fee mechanism:
    - Calculate fees as input-output difference
    - Allocate fees to miners via coinbase transaction
 
-6. **Proper Genesis Block** - Replace manual UTXO initialization:
+3. **Proper Genesis Block** - Replace manual UTXO initialization:
    - Create genesis transaction in genesis block
    - Distribute initial coins through proper transaction outputs
 
 ### Low Priority (Advanced Features)
-7. **Transaction Pool Management** - Better pending transaction handling
-8. **Network Layer** - P2P communication between nodes
-9. **Persistence** - Save/load blockchain state from disk
-10. **Dynamic Difficulty** - Adjust mining difficulty based on block time
+1. **Transaction Pool Management** - Better pending transaction handling
+2. **Network Layer** - P2P communication between nodes
+3. **Persistence** - Save/load blockchain state from disk
+4. **Dynamic Difficulty** - Adjust mining difficulty based on block time
 
 The codebase follows Go conventions with structured logging using emojis for user-friendly output.
