@@ -5,8 +5,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Common Commands
 
 ```bash
-# Run the blockchain demo
-go run .
+# Run the original blockchain demo
+go run . --demo
+
+# Run as a blockchain node (HTTP API server)
+go run . --node --port 8080
+
+# Run multiple nodes with peer connections
+go run . --node --port 8001 --peers localhost:8002,localhost:8003
+go run . --node --port 8002 --peers localhost:8001,localhost:8003
+go run . --node --port 8003 --peers localhost:8001,localhost:8002
+
+# Client commands (connect to running node)
+go run . --client --cmd status
+go run . --client --cmd balance --address <wallet-address>
+go run . --client --cmd send --address <from> --to <to> --amount 5.0 --fee 0.1
+go run . --client --cmd mine
 
 # Build the executable
 go build .
@@ -115,6 +129,30 @@ This is a basic blockchain implementation in Go consisting of several core compo
 3. `applyUTXOChanges()` - Atomically modify UTXO set
 4. Rollback to backup if any step fails
 
+## P2P Network Development Plan
+
+### **Phase 1: Foundation (High Priority)**
+1. **Restructure main.go** - Add command-line flags for node/client modes
+2. **Create Node structure** - Basic node with blockchain, wallet, and peer management
+3. **HTTP API server** - Basic REST endpoints for health/status
+4. **Transaction APIs** - Endpoints for creating and submitting transactions
+5. **Query APIs** - Balance and blockchain information endpoints
+6. **Client CLI** - Command-line interface for user interactions
+
+### **Phase 2: P2P Communication (Medium Priority)**
+7. **Peer discovery** - Simple peer list management and registration
+8. **Transaction broadcasting** - Propagate transactions across network
+9. **Mining coordination** - Prevent simultaneous mining conflicts
+
+### **Phase 3: Consensus (Medium Priority)**
+10. **Blockchain sync** - Synchronize blockchain state between peers
+11. **Longest chain** - Implement consensus mechanism
+12. **Conflict resolution** - Handle competing blockchain versions
+
+### **Phase 4: Enhancements (Low Priority)**
+13. **WebSocket updates** - Real-time notifications (optional)
+14. **Persistent storage** - Save state across restarts (optional)
+
 ## Next Steps for Development
 
 ### High Priority (Features & Usability)
@@ -124,8 +162,6 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 ### Low Priority (Advanced Features)
 1. **Transaction Pool Management** - Better pending transaction handling
-2. **Network Layer** - P2P communication between nodes
-3. **Persistence** - Save/load blockchain state from disk
-4. **Dynamic Difficulty** - Adjust mining difficulty based on block time
+2. **Dynamic Difficulty** - Adjust mining difficulty based on block time
 
 The codebase follows Go conventions with structured logging using emojis for user-friendly output.

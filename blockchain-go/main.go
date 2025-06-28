@@ -1,8 +1,50 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"log"
+	"os"
+)
 
 func main() {
+	var (
+		nodeMode   = flag.Bool("node", false, "Run as blockchain node")
+		clientMode = flag.Bool("client", false, "Run as client")
+		port       = flag.Int("port", 8080, "Port for node to listen on")
+		peers      = flag.String("peers", "", "Comma-separated list of peer addresses")
+		demo       = flag.Bool("demo", false, "Run original demo mode")
+	)
+	flag.Parse()
+
+	if *demo {
+		runDemo()
+		return
+	}
+
+	if *nodeMode && *clientMode {
+		log.Fatal("❌ Cannot run as both node and client")
+	}
+
+	if !*nodeMode && !*clientMode {
+		fmt.Println("🚀 Blockchain Go - P2P Network")
+		fmt.Println("Usage:")
+		fmt.Println("  --demo           Run original demo")
+		fmt.Println("  --node           Run as blockchain node")
+		fmt.Println("  --client         Run as client")
+		fmt.Println("  --port <port>    Port for node (default: 8080)")
+		fmt.Println("  --peers <peers>  Comma-separated peer addresses")
+		os.Exit(0)
+	}
+
+	if *nodeMode {
+		runNode(*port, *peers)
+	} else if *clientMode {
+		runClient()
+	}
+}
+
+func runDemo() {
 	wallets := NewWallets()
 
 	aliceWallet := wallets.CreateWallet()
@@ -84,4 +126,59 @@ func main() {
 
 	fmt.Println("\n🔗 Final Blockchain:")
 	fmt.Println(bc)
+}
+
+func runNode(port int, peers string) {
+	node := NewNode(port, peers)
+	node.Start()
+}
+
+func runClient() {
+	var (
+		nodeAddr = flag.String("node-addr", "localhost:8080", "Address of the blockchain node")
+		command  = flag.String("cmd", "", "Command to execute: balance, send, mine, status")
+		address  = flag.String("address", "", "Wallet address")
+		to       = flag.String("to", "", "Recipient address")
+		amount   = flag.Float64("amount", 0, "Amount to send")
+		fee      = flag.Float64("fee", 0.01, "Transaction fee")
+	)
+
+	if len(os.Args) > 2 {
+		flag.CommandLine.Parse(os.Args[2:])
+	}
+
+	fmt.Printf("💻 Blockchain Client - connecting to %s\n", *nodeAddr)
+
+	if *command == "" {
+		fmt.Println("Available commands:")
+		fmt.Println("  --cmd balance --address <addr>         Check wallet balance")
+		fmt.Println("  --cmd send --address <from> --to <to> --amount <amount> [--fee <fee>]  Send transaction")
+		fmt.Println("  --cmd mine                             Trigger mining")
+		fmt.Println("  --cmd status                           Get node status")
+		fmt.Println("  --node-addr <addr>                     Specify node address (default: localhost:8080)")
+		return
+	}
+
+	client := NewClient(*nodeAddr)
+
+	switch *command {
+	case "balance":
+		if *address == "" {
+			fmt.Println("❌ Address required for balance command")
+			return
+		}
+		client.GetBalance(*address)
+	case "send":
+		if *address == "" || *to == "" || *amount <= 0 {
+			fmt.Println("❌ From address, to address, and amount required for send command")
+			return
+		}
+		client.SendTransaction(*address, *to, *amount, *fee)
+	case "mine":
+		client.Mine()
+	case "status":
+		client.GetStatus()
+	default:
+		fmt.Printf("❌ Unknown command: %s\n", *command)
+	}
 }
