@@ -47,6 +47,9 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Mining** (`mining.go`): Proof-of-work mining implementation with configurable difficulty (currently set to 4 leading zeros)
 - **Wallet** (`wallet.go`): ECDSA key pair generation and Bitcoin-style address derivation with Base58 encoding
 - **Base58** (`base58.go`): Bitcoin-compatible Base58 encoding/decoding for human-readable addresses
+- **Node** (`node.go`): P2P network node with HTTP API server, peer management, transaction/block broadcasting
+- **Client** (`client.go`): HTTP client for interacting with blockchain nodes via REST API
+- **Main** (`main.go`): Command-line interface supporting demo, node, and client modes
 
 ### Key Architecture Patterns
 
@@ -83,9 +86,9 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 ### Current Limitations
 
-- No network layer or peer-to-peer communication
+- ~~No network layer or peer-to-peer communication~~ ✅ **RESOLVED**
 - Fixed mining difficulty (no difficulty adjustment)
-- Single miner implementation
+- No full blockchain synchronization (longest chain consensus pending)
 - No persistence layer (blockchain resets on restart)
 
 ### UTXO Implementation Status
@@ -131,27 +134,67 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 ## P2P Network Development Plan
 
-### **Phase 1: Foundation (High Priority)**
-1. **Restructure main.go** - Add command-line flags for node/client modes
-2. **Create Node structure** - Basic node with blockchain, wallet, and peer management
-3. **HTTP API server** - Basic REST endpoints for health/status
-4. **Transaction APIs** - Endpoints for creating and submitting transactions
-5. **Query APIs** - Balance and blockchain information endpoints
-6. **Client CLI** - Command-line interface for user interactions
+### **✅ Phase 1: Foundation (COMPLETED)**
+1. ✅ **Restructure main.go** - Add command-line flags for node/client modes
+2. ✅ **Create Node structure** - Basic node with blockchain, wallet, and peer management
+3. ✅ **HTTP API server** - Basic REST endpoints for health/status
+4. ✅ **Transaction APIs** - Endpoints for creating and submitting transactions
+5. ✅ **Query APIs** - Balance and blockchain information endpoints
+6. ✅ **Client CLI** - Command-line interface for user interactions
 
-### **Phase 2: P2P Communication (Medium Priority)**
-7. **Peer discovery** - Simple peer list management and registration
-8. **Transaction broadcasting** - Propagate transactions across network
-9. **Mining coordination** - Prevent simultaneous mining conflicts
+### **✅ Phase 2: P2P Communication (COMPLETED)**
+7. ✅ **Peer discovery** - Simple peer list management and registration
+8. ✅ **Transaction broadcasting** - Propagate transactions across network
+9. ✅ **Mining coordination** - Prevent simultaneous mining conflicts
 
-### **Phase 3: Consensus (Medium Priority)**
+### **🚧 Phase 3: Consensus (PENDING)**
 10. **Blockchain sync** - Synchronize blockchain state between peers
 11. **Longest chain** - Implement consensus mechanism
 12. **Conflict resolution** - Handle competing blockchain versions
 
-### **Phase 4: Enhancements (Low Priority)**
+### **📋 Phase 4: Enhancements (OPTIONAL)**
 13. **WebSocket updates** - Real-time notifications (optional)
 14. **Persistent storage** - Save state across restarts (optional)
+
+## Current P2P Implementation Status
+
+**✅ COMPLETED FEATURES:**
+
+**Node Architecture:**
+- Multi-mode executable: `--node`, `--client`, `--demo`
+- HTTP API server with comprehensive endpoints
+- Thread-safe operations with mutex protection
+- Peer discovery and management system
+
+**P2P Communication:**
+- Automatic peer discovery and connection
+- Transaction broadcasting across network
+- Block broadcasting for mining coordination
+- Duplicate prevention for transactions and blocks
+
+**API Endpoints:**
+- `GET /health` - Node health check
+- `GET /status` - Node status and statistics
+- `GET /peers` - List connected peers
+- `POST /peers` - Add new peer to network
+- `GET /blockchain` - Full blockchain data
+- `GET /balance/<address>` - Query wallet balance
+- `POST /transaction` - Create and broadcast transaction
+- `POST /transaction/broadcast` - Receive broadcasted transactions
+- `POST /block/broadcast` - Receive broadcasted blocks
+- `POST /mine` - Mine new block and broadcast
+
+**Client Interface:**
+- `--cmd status` - Get node status
+- `--cmd balance --address <addr>` - Check balance
+- `--cmd send --address <from> --to <to> --amount <amount>` - Send transaction
+- `--cmd mine` - Trigger mining
+
+**Network Behavior:**
+- Nodes automatically announce themselves to peers
+- Transactions propagate instantly across the network
+- Mined blocks are broadcast to prevent conflicts
+- Basic mining coordination implemented
 
 ## Next Steps for Development
 
