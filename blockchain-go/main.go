@@ -23,7 +23,7 @@ func main() {
 	fmt.Printf("\n💰 Miner now has %.2f spendable coins from mining\n", MiningReward)
 
 	fmt.Println("\n💸 Creating transaction from miner to Alice...")
-	tx := bc.CreateTransaction(minerWallet, aliceWallet, 5.0)
+	tx := bc.CreateTransaction(minerWallet, aliceWallet, 5.0, 0.1)
 	if tx != nil {
 		wallet := wallets.GetWallet(minerWallet)
 		prevTXs := make(map[string]*Transaction)
@@ -53,7 +53,7 @@ func main() {
 	}
 
 	fmt.Println("\n💸 Now Alice can send to Bob...")
-	tx2 := bc.CreateTransaction(aliceWallet, bobWallet, 2.0)
+	tx2 := bc.CreateTransaction(aliceWallet, bobWallet, 2.0, 0.05)
 	if tx2 != nil {
 		wallet := wallets.GetWallet(aliceWallet)
 		prevTXs := make(map[string]*Transaction)

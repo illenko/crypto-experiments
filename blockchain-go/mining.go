@@ -26,8 +26,18 @@ func (m *Miner) Mine(blockchain *Blockchain) *Block {
 		previousHash = lastBlock.Hash
 	}
 
-	coinbaseTx := NewCoinbaseTransaction(m.Address)
-	fmt.Printf("💰 Created coinbase transaction: %.2f coins to %s\n", MiningReward, m.Address)
+	var totalFees float64
+	for _, tx := range blockchain.PendingTransactions {
+		totalFees += tx.CalculateFee(blockchain.UTXOSet)
+	}
+
+	coinbaseTx := NewCoinbaseTransaction(m.Address, totalFees)
+	if totalFees > 0 {
+		fmt.Printf("💰 Created coinbase transaction: %.2f coins (%.2f reward + %.2f fees) to %s\n",
+			MiningReward+totalFees, MiningReward, totalFees, m.Address)
+	} else {
+		fmt.Printf("💰 Created coinbase transaction: %.2f coins to %s\n", MiningReward, m.Address)
+	}
 
 	transactions := []*Transaction{coinbaseTx}
 	transactions = append(transactions, blockchain.PendingTransactions...)

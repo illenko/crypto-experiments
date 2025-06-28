@@ -159,7 +159,32 @@ func (tx *Transaction) Verify(prevTXs map[string]*Transaction) bool {
 	return true
 }
 
-func NewCoinbaseTransaction(toAddress string) *Transaction {
+func (tx *Transaction) CalculateFee(utxoSet map[string][]*UTXO) float64 {
+	if tx.IsCoinbase() {
+		return 0.0
+	}
+
+	var inputSum float64
+	for _, input := range tx.Inputs {
+		for _, addrUTXOs := range utxoSet {
+			for _, utxo := range addrUTXOs {
+				if utxo.TxID == input.TxID && utxo.OutIndex == input.OutIndex {
+					inputSum += utxo.Output.Value
+					break
+				}
+			}
+		}
+	}
+
+	var outputSum float64
+	for _, output := range tx.Outputs {
+		outputSum += output.Value
+	}
+
+	return inputSum - outputSum
+}
+
+func NewCoinbaseTransaction(toAddress string, fees float64) *Transaction {
 	input := &TxInput{
 		TxID:      "",
 		OutIndex:  -1,
@@ -168,7 +193,7 @@ func NewCoinbaseTransaction(toAddress string) *Transaction {
 	}
 
 	output := &TxOutput{
-		Value:   MiningReward,
+		Value:   MiningReward + fees,
 		Address: toAddress,
 	}
 

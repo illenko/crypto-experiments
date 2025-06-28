@@ -58,14 +58,16 @@ func Hash(block *Block) string {
 	return hex.EncodeToString(hasher.Sum(nil))
 }
 
-func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount float64) *Transaction {
+func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount, fee float64) *Transaction {
 	senderUTXOs := b.FindUTXO(fromAddress)
 
 	var inputs []*TxInput
 	var total float64
 
+	totalNeeded := amount + fee
+
 	for _, utxo := range senderUTXOs {
-		if total >= amount {
+		if total >= totalNeeded {
 			break
 		}
 		input := &TxInput{
@@ -78,8 +80,8 @@ func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount flo
 		total += utxo.Output.Value
 	}
 
-	if total < amount {
-		fmt.Printf("❌ Insufficient funds: have %.2f, need %.2f\n", total, amount)
+	if total < totalNeeded {
+		fmt.Printf("❌ Insufficient funds: have %.2f, need %.2f (amount: %.2f + fee: %.2f)\n", total, totalNeeded, amount, fee)
 		return nil
 	}
 
@@ -90,9 +92,9 @@ func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount flo
 		Address: toAddress,
 	})
 
-	if total > amount {
+	if total > totalNeeded {
 		outputs = append(outputs, &TxOutput{
-			Value:   total - amount,
+			Value:   total - totalNeeded,
 			Address: fromAddress,
 		})
 	}
@@ -104,7 +106,11 @@ func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount flo
 	transaction.SetID()
 
 	b.PendingTransactions = append(b.PendingTransactions, transaction)
-	fmt.Printf("💸 New transaction: %s -> %s: %.2f (ID: %s)\n", fromAddress, toAddress, amount, transaction.ID[:8])
+	if fee > 0 {
+		fmt.Printf("💸 New transaction: %s -> %s: %.2f + %.2f fee (ID: %s)\n", fromAddress, toAddress, amount, fee, transaction.ID[:8])
+	} else {
+		fmt.Printf("💸 New transaction: %s -> %s: %.2f (ID: %s)\n", fromAddress, toAddress, amount, transaction.ID[:8])
+	}
 	return transaction
 }
 
@@ -214,10 +220,23 @@ func (b *Blockchain) validateTransactions(block *Block) error {
 			if i != 0 {
 				return fmt.Errorf("coinbase transaction must be the first transaction in block")
 			}
-			if len(tx.Outputs) != 1 || tx.Outputs[0].Value != MiningReward {
-				return fmt.Errorf("invalid coinbase transaction reward")
+
+			var totalFees float64
+			for j := 1; j < len(block.Transactions); j++ {
+				totalFees += block.Transactions[j].CalculateFee(b.UTXOSet)
 			}
-			fmt.Printf("✓ Coinbase transaction validated: %.2f coins to %s\n", tx.Outputs[0].Value, tx.Outputs[0].Address)
+
+			expectedReward := MiningReward + totalFees
+			if len(tx.Outputs) != 1 || tx.Outputs[0].Value != expectedReward {
+				return fmt.Errorf("invalid coinbase transaction reward: expected %.2f, got %.2f", expectedReward, tx.Outputs[0].Value)
+			}
+
+			if totalFees > 0 {
+				fmt.Printf("✓ Coinbase transaction validated: %.2f coins (%.2f reward + %.2f fees) to %s\n",
+					tx.Outputs[0].Value, MiningReward, totalFees, tx.Outputs[0].Address)
+			} else {
+				fmt.Printf("✓ Coinbase transaction validated: %.2f coins to %s\n", tx.Outputs[0].Value, tx.Outputs[0].Address)
+			}
 			continue
 		}
 
@@ -255,7 +274,8 @@ func (b *Blockchain) validateTransactions(block *Block) error {
 			return fmt.Errorf("transaction %s: insufficient inputs (%.2f) for outputs (%.2f)", tx.ID, inputSum, outputSum)
 		}
 
-		fmt.Printf("✓ Transaction %s validated: %.2f in, %.2f out\n", tx.ID[:8], inputSum, outputSum)
+		fee := inputSum - outputSum
+		fmt.Printf("✓ Transaction %s validated: %.2f in, %.2f out, %.2f fee\n", tx.ID[:8], inputSum, outputSum, fee)
 	}
 
 	return nil
