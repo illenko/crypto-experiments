@@ -68,8 +68,8 @@ func (b *Blockchain) CreateTransaction(fromAddress, toAddress string, amount flo
 		input := &TxInput{
 			TxID:      utxo.TxID,
 			OutIndex:  utxo.OutIndex,
-			Signature: "",
-			PubKey:    fromAddress,
+			Signature: nil,
+			PubKey:    nil,
 		}
 		inputs = append(inputs, input)
 		total += utxo.Output.Value
@@ -117,7 +117,7 @@ func (b *Blockchain) utxoExists(address, txID string, outIndex int) bool {
 	if !exists {
 		return false
 	}
-	
+
 	for _, utxo := range utxos {
 		if utxo.TxID == txID && utxo.OutIndex == outIndex {
 			return true
@@ -186,39 +186,45 @@ func (b *Blockchain) String() string {
 
 func (b *Blockchain) validateTransactions(block *Block) error {
 	fmt.Printf("🔍 Validating transactions for block #%d...\n", block.Index)
-	
+
 	for _, tx := range block.Transactions {
 		if tx.IsCoinbase() {
 			continue
 		}
-		
+
 		var inputSum float64
 		for _, input := range tx.Inputs {
-			if !b.utxoExists(input.PubKey, input.TxID, input.OutIndex) {
-				return fmt.Errorf("UTXO not found: %s[%d] for address %s", input.TxID, input.OutIndex, input.PubKey)
-			}
-			
-			utxos := b.FindUTXO(input.PubKey)
-			for _, utxo := range utxos {
-				if utxo.TxID == input.TxID && utxo.OutIndex == input.OutIndex {
-					inputSum += utxo.Output.Value
+			ownerAddress := ""
+			for addr, addrUTXOs := range b.UTXOSet {
+				for _, utxo := range addrUTXOs {
+					if utxo.TxID == input.TxID && utxo.OutIndex == input.OutIndex {
+						ownerAddress = addr
+						inputSum += utxo.Output.Value
+						break
+					}
+				}
+				if ownerAddress != "" {
 					break
 				}
 			}
+
+			if ownerAddress == "" {
+				return fmt.Errorf("UTXO not found: %s[%d]", input.TxID, input.OutIndex)
+			}
 		}
-		
+
 		var outputSum float64
 		for _, output := range tx.Outputs {
 			outputSum += output.Value
 		}
-		
+
 		if inputSum < outputSum {
 			return fmt.Errorf("transaction %s: insufficient inputs (%.2f) for outputs (%.2f)", tx.ID, inputSum, outputSum)
 		}
-		
+
 		fmt.Printf("✓ Transaction %s validated: %.2f in, %.2f out\n", tx.ID[:8], inputSum, outputSum)
 	}
-	
+
 	return nil
 }
 
@@ -226,10 +232,24 @@ func (b *Blockchain) applyUTXOChanges(block *Block) error {
 	for _, tx := range block.Transactions {
 		if !tx.IsCoinbase() {
 			for _, input := range tx.Inputs {
-				b.removeUTXO(input.PubKey, input.TxID, input.OutIndex)
+				ownerAddress := ""
+				for addr, addrUTXOs := range b.UTXOSet {
+					for _, utxo := range addrUTXOs {
+						if utxo.TxID == input.TxID && utxo.OutIndex == input.OutIndex {
+							ownerAddress = addr
+							break
+						}
+					}
+					if ownerAddress != "" {
+						break
+					}
+				}
+				if ownerAddress != "" {
+					b.removeUTXO(ownerAddress, input.TxID, input.OutIndex)
+				}
 			}
 		}
-		
+
 		for i, output := range tx.Outputs {
 			utxo := &UTXO{
 				TxID:     tx.ID,
@@ -249,14 +269,14 @@ func (b *Blockchain) SubmitBlock(block *Block) error {
 	}
 
 	utxoBackup := b.copyUTXOSet()
-	
+
 	if err := b.validateTransactions(block); err != nil {
 		fmt.Printf("❌ Transaction validation failed: %v\n", err)
 		return fmt.Errorf("transaction validation failed: %v", err)
 	}
 
 	fmt.Printf("🔄 Updating UTXO set for block #%d...\n", block.Index)
-	
+
 	if err := b.applyUTXOChanges(block); err != nil {
 		fmt.Printf("⚠️ UTXO update failed, rolling back...\n")
 		b.UTXOSet = utxoBackup

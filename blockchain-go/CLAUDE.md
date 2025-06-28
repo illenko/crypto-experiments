@@ -29,12 +29,16 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 - **Block** (`block.go`): Basic block structure containing index, timestamp, transactions, previous hash, current hash, and nonce for proof-of-work
 - **Blockchain** (`blockchain.go`): Main blockchain structure managing the chain of blocks, pending transactions, and UTXO set. Includes validation logic and UTXO management
-- **Transaction** (`transaction.go`): UTXO-based transaction structure with inputs (TxInput), outputs (TxOutput), and transaction ID. Supports coinbase transactions and proper UTXO handling
+- **Transaction** (`transaction.go`): UTXO-based transaction structure with inputs (TxInput), outputs (TxOutput), and transaction ID. Includes digital signature support and transaction validation
 - **Mining** (`mining.go`): Proof-of-work mining implementation with configurable difficulty (currently set to 4 leading zeros)
+- **Wallet** (`wallet.go`): ECDSA key pair generation and Bitcoin-style address derivation with Base58 encoding
+- **Base58** (`base58.go`): Bitcoin-compatible Base58 encoding/decoding for human-readable addresses
 
 ### Key Architecture Patterns
 
 - **UTXO Model**: Bitcoin-style unspent transaction outputs with proper coin creation/destruction
+- **Digital Signatures**: ECDSA cryptographic authentication for transaction authorization
+- **Wallet System**: Key pair generation and Bitcoin-style address derivation
 - **Proof-of-Work**: Uses SHA-256 hashing with nonce increment until hash has required leading zeros
 - **Genesis Block**: First block created automatically with all-zero previous hash
 - **Pending Transactions**: UTXO-based transactions accumulate in blockchain until mined into a block
@@ -52,10 +56,11 @@ This is a basic blockchain implementation in Go consisting of several core compo
    - Validates sufficient funds
    - Creates transaction inputs (spending UTXOs) and outputs (new UTXOs)
    - Handles change back to sender
-3. Miner calls `Mine()` to create candidate block with pending transactions
-4. Mining loop increments nonce until valid hash found (proof-of-work)
-5. Validated block added to chain via `SubmitBlock()` which:
-   - Pre-validates all transactions (UTXO existence, input/output balance)
+3. Sign transactions with wallet private keys via `Sign()` method
+4. Miner calls `Mine()` to create candidate block with pending transactions
+5. Mining loop increments nonce until valid hash found (proof-of-work)
+6. Validated block added to chain via `SubmitBlock()` which:
+   - Pre-validates all transactions (UTXO existence, input/output balance, signatures)
    - Creates backup of UTXO set for potential rollback
    - Atomically removes spent UTXOs and adds new ones
    - Rolls back changes if any step fails
@@ -64,11 +69,11 @@ This is a basic blockchain implementation in Go consisting of several core compo
 ### Current Limitations
 
 - No network layer or peer-to-peer communication
-- No digital signatures for transaction authentication (UTXOs can be spent by anyone)
 - Fixed mining difficulty (no difficulty adjustment)
 - Single miner implementation
 - No persistence layer (blockchain resets on restart)
 - Manual UTXO initialization in main.go (no proper genesis transaction)
+- No coinbase transactions for mining rewards
 
 ### UTXO Implementation Status
 
@@ -82,9 +87,12 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Atomic UTXO updates with rollback**
 - **Pre-validation of all transactions before state changes**
 - **Conservation of money enforcement (input sum >= output sum)**
+- **Digital signatures for transaction authentication**
+- **ECDSA key pair generation and wallet system**
+- **Bitcoin-style address derivation with Base58 encoding**
+- **Transaction signing and verification**
 
 **🚧 Remaining Work:**
-- Digital signatures for transaction inputs
 - Coinbase transactions for mining rewards
 - Balance calculation from UTXOs
 - Transaction fees
@@ -93,6 +101,8 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 **🔒 Security Features Implemented:**
 - **Double-Spending Prevention**: Each UTXO can only be spent once
+- **Digital Signature Authentication**: Only private key holders can spend UTXOs
+- **Cryptographic Address Derivation**: Addresses derived from public key hashes
 - **Atomic Updates**: All-or-nothing modifications to UTXO set
 - **Pre-validation**: All transactions validated before any state changes
 - **Rollback Protection**: Failed validations don't corrupt UTXO state
@@ -108,13 +118,7 @@ This is a basic blockchain implementation in Go consisting of several core compo
 ## Next Steps for Development
 
 ### High Priority (Security & Core Functionality)
-1. **Add Digital Signatures** - Implement cryptographic authentication:
-   - Generate key pairs for addresses
-   - Sign transaction inputs with private keys
-   - Verify signatures during validation
-   - Prevent unauthorized spending of UTXOs
-
-2. **Create Coinbase Transactions** - Add mining rewards:
+1. **Create Coinbase Transactions** - Add mining rewards:
    - Special transaction type with no inputs (creates new coins)
    - Miner address receives block reward
    - Integrate with mining process
