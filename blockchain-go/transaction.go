@@ -12,6 +12,8 @@ import (
 	"math/big"
 )
 
+const MiningReward = 10.0
+
 type TxOutput struct {
 	Value     float64 `json:"value"`
 	Address   string  `json:"address"`
@@ -155,4 +157,49 @@ func (tx *Transaction) Verify(prevTXs map[string]*Transaction) bool {
 	}
 
 	return true
+}
+
+func NewCoinbaseTransaction(toAddress string) *Transaction {
+	input := &TxInput{
+		TxID:      "",
+		OutIndex:  -1,
+		Signature: nil,
+		PubKey:    nil,
+	}
+
+	output := &TxOutput{
+		Value:   MiningReward,
+		Address: toAddress,
+	}
+
+	tx := &Transaction{
+		Inputs:  []*TxInput{input},
+		Outputs: []*TxOutput{output},
+	}
+	tx.SetID()
+
+	return tx
+}
+
+func NewGenesisTransaction() *Transaction {
+	input := &TxInput{
+		TxID:      "",
+		OutIndex:  -1,
+		Signature: []byte("Educational Blockchain 2025 - Genesis Block Created"),
+		PubKey:    nil,
+	}
+
+	output := &TxOutput{
+		Value:     50.0,
+		Address:   "1GenesisBlockUnspendableAddressXXXXXXXXXXXXXX",
+		ScriptPub: "Genesis Block - These coins are unspendable by design",
+	}
+
+	tx := &Transaction{
+		ID:      "genesis-coinbase-transaction",
+		Inputs:  []*TxInput{input},
+		Outputs: []*TxOutput{output},
+	}
+
+	return tx
 }

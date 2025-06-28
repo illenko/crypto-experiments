@@ -26,10 +26,16 @@ func (m *Miner) Mine(blockchain *Blockchain) *Block {
 		previousHash = lastBlock.Hash
 	}
 
+	coinbaseTx := NewCoinbaseTransaction(m.Address)
+	fmt.Printf("💰 Created coinbase transaction: %.2f coins to %s\n", MiningReward, m.Address)
+
+	transactions := []*Transaction{coinbaseTx}
+	transactions = append(transactions, blockchain.PendingTransactions...)
+
 	candidateBlock := &Block{
 		Index:        len(blockchain.Chain),
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Transactions: blockchain.PendingTransactions,
+		Transactions: transactions,
 		PreviousHash: previousHash,
 		Nonce:        0,
 	}

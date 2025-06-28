@@ -40,7 +40,8 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Digital Signatures**: ECDSA cryptographic authentication for transaction authorization
 - **Wallet System**: Key pair generation and Bitcoin-style address derivation
 - **Proof-of-Work**: Uses SHA-256 hashing with nonce increment until hash has required leading zeros
-- **Genesis Block**: First block created automatically with all-zero previous hash
+- **Genesis Block**: First block created automatically with coinbase transaction distributing initial coins
+- **Coinbase Transactions**: Special transactions with no inputs that create new coins for mining rewards
 - **Pending Transactions**: UTXO-based transactions accumulate in blockchain until mined into a block
 - **Block Validation**: Validates proof-of-work, block index, and previous hash linkage
 - **UTXO Set Management**: Tracks unspent outputs by address, removes spent UTXOs and adds new ones atomically
@@ -50,7 +51,7 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 ### Data Flow
 
-1. Create blockchain with genesis block and initialize empty UTXO set
+1. Create blockchain with genesis block containing coinbase transaction that distributes initial coins
 2. Create UTXO-based transactions via `CreateTransaction()` which:
    - Finds sender's available UTXOs
    - Validates sufficient funds
@@ -72,8 +73,6 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - Fixed mining difficulty (no difficulty adjustment)
 - Single miner implementation
 - No persistence layer (blockchain resets on restart)
-- Manual UTXO initialization in main.go (no proper genesis transaction)
-- No coinbase transactions for mining rewards
 
 ### UTXO Implementation Status
 
@@ -91,9 +90,10 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **ECDSA key pair generation and wallet system**
 - **Bitcoin-style address derivation with Base58 encoding**
 - **Transaction signing and verification**
+- **Coinbase transactions for mining rewards**
+- **Proper genesis block with coinbase transaction**
 
 **🚧 Remaining Work:**
-- Coinbase transactions for mining rewards
 - Balance calculation from UTXOs
 - Transaction fees
 
@@ -117,13 +117,7 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 ## Next Steps for Development
 
-### High Priority (Security & Core Functionality)
-1. **Create Coinbase Transactions** - Add mining rewards:
-   - Special transaction type with no inputs (creates new coins)
-   - Miner address receives block reward
-   - Integrate with mining process
-
-### Medium Priority (Features & Usability)
+### High Priority (Features & Usability)
 1. **Balance Calculation** - Replace manual UTXO management with:
    - `GetBalance(address)` method that sums UTXOs
    - Better transaction creation with automatic UTXO selection
@@ -131,10 +125,6 @@ This is a basic blockchain implementation in Go consisting of several core compo
 2. **Transaction Fees** - Implement fee mechanism:
    - Calculate fees as input-output difference
    - Allocate fees to miners via coinbase transaction
-
-3. **Proper Genesis Block** - Replace manual UTXO initialization:
-   - Create genesis transaction in genesis block
-   - Distribute initial coins through proper transaction outputs
 
 ### Low Priority (Advanced Features)
 1. **Transaction Pool Management** - Better pending transaction handling

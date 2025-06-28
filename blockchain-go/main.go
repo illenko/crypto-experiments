@@ -14,24 +14,18 @@ func main() {
 	fmt.Printf("⛏️  Miner: %s\n", minerWallet)
 
 	bc := NewBlockchain()
-
-	bc.UTXOSet[aliceWallet] = []*UTXO{
-		{
-			TxID:     "genesis",
-			OutIndex: 0,
-			Output: &TxOutput{
-				Value:     100.0,
-				Address:   aliceWallet,
-				ScriptPub: string(wallets.GetWallet(aliceWallet).PublicKey),
-			},
-		},
-	}
-
 	miner := NewMiner(minerWallet)
 
-	tx := bc.CreateTransaction(aliceWallet, bobWallet, 50.0)
+	fmt.Println("\n💎 Mining first block to create spendable coins...")
+	block1 := miner.Mine(bc)
+	bc.SubmitBlock(block1)
+
+	fmt.Printf("\n💰 Miner now has %.2f spendable coins from mining\n", MiningReward)
+
+	fmt.Println("\n💸 Creating transaction from miner to Alice...")
+	tx := bc.CreateTransaction(minerWallet, aliceWallet, 5.0)
 	if tx != nil {
-		wallet := wallets.GetWallet(aliceWallet)
+		wallet := wallets.GetWallet(minerWallet)
 		prevTXs := make(map[string]*Transaction)
 
 		for _, input := range tx.Inputs {
@@ -39,8 +33,8 @@ func main() {
 				ID: input.TxID,
 				Outputs: []*TxOutput{
 					{
-						Value:     100.0,
-						Address:   aliceWallet,
+						Value:     MiningReward,
+						Address:   minerWallet,
 						ScriptPub: string(wallet.PublicKey),
 					},
 				},
@@ -53,10 +47,41 @@ func main() {
 			input.PubKey = wallet.PublicKey
 		}
 
-		newBlock := miner.Mine(bc)
-		bc.SubmitBlock(newBlock)
+		fmt.Println("\n💎 Mining second block with the transaction...")
+		block2 := miner.Mine(bc)
+		bc.SubmitBlock(block2)
 	}
 
-	fmt.Println("\n🔗 Blockchain:")
+	fmt.Println("\n💸 Now Alice can send to Bob...")
+	tx2 := bc.CreateTransaction(aliceWallet, bobWallet, 2.0)
+	if tx2 != nil {
+		wallet := wallets.GetWallet(aliceWallet)
+		prevTXs := make(map[string]*Transaction)
+
+		for _, input := range tx2.Inputs {
+			prevTXs[input.TxID] = &Transaction{
+				ID: input.TxID,
+				Outputs: []*TxOutput{
+					{
+						Value:     5.0,
+						Address:   aliceWallet,
+						ScriptPub: string(wallet.PublicKey),
+					},
+				},
+			}
+		}
+
+		tx2.Sign(wallet.PrivateKey, prevTXs)
+
+		for _, input := range tx2.Inputs {
+			input.PubKey = wallet.PublicKey
+		}
+
+		fmt.Println("\n💎 Mining third block with Alice's transaction...")
+		block3 := miner.Mine(bc)
+		bc.SubmitBlock(block3)
+	}
+
+	fmt.Println("\n🔗 Final Blockchain:")
 	fmt.Println(bc)
 }

@@ -29,10 +29,13 @@ func NewBlockchain() *Blockchain {
 }
 
 func createGenesisBlock() *Block {
+	genesisTx := NewGenesisTransaction()
+	fmt.Printf("🎯 Creating genesis transaction: %.2f coins (unspendable)\n", genesisTx.Outputs[0].Value)
+
 	block := &Block{
 		Index:        0,
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
-		Transactions: make([]*Transaction, 0),
+		Transactions: []*Transaction{genesisTx},
 		PreviousHash: strings.Repeat("0", 64),
 		Nonce:        0,
 	}
@@ -187,9 +190,39 @@ func (b *Blockchain) String() string {
 func (b *Blockchain) validateTransactions(block *Block) error {
 	fmt.Printf("🔍 Validating transactions for block #%d...\n", block.Index)
 
-	for _, tx := range block.Transactions {
+	if block.Index == 0 {
+		if len(block.Transactions) != 1 {
+			return fmt.Errorf("genesis block should have exactly one transaction")
+		}
+		genesisTx := block.Transactions[0]
+		if !genesisTx.IsCoinbase() {
+			return fmt.Errorf("genesis block transaction must be coinbase")
+		}
+		if genesisTx.ID != "genesis-coinbase-transaction" {
+			return fmt.Errorf("invalid genesis transaction ID")
+		}
+		fmt.Printf("✓ Genesis block validated: genesis transaction present (unspendable)\n")
+		return nil
+	}
+
+	if len(block.Transactions) == 0 {
+		return fmt.Errorf("non-genesis blocks must have at least one transaction (coinbase)")
+	}
+
+	for i, tx := range block.Transactions {
 		if tx.IsCoinbase() {
+			if i != 0 {
+				return fmt.Errorf("coinbase transaction must be the first transaction in block")
+			}
+			if len(tx.Outputs) != 1 || tx.Outputs[0].Value != MiningReward {
+				return fmt.Errorf("invalid coinbase transaction reward")
+			}
+			fmt.Printf("✓ Coinbase transaction validated: %.2f coins to %s\n", tx.Outputs[0].Value, tx.Outputs[0].Address)
 			continue
+		}
+
+		if i == 0 {
+			return fmt.Errorf("first transaction must be coinbase transaction")
 		}
 
 		var inputSum float64
@@ -248,6 +281,11 @@ func (b *Blockchain) applyUTXOChanges(block *Block) error {
 					b.removeUTXO(ownerAddress, input.TxID, input.OutIndex)
 				}
 			}
+		}
+
+		if tx.IsCoinbase() && block.Index == 0 {
+			fmt.Printf("🚫 Genesis coinbase ignored: %.2f coins remain unspendable\n", tx.Outputs[0].Value)
+			continue
 		}
 
 		for i, output := range tx.Outputs {
