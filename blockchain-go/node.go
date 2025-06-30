@@ -52,9 +52,6 @@ func NewNode(port int, peers string) *Node {
 }
 
 func (n *Node) Start() {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-
 	fmt.Printf("🔗 Starting node %s on port %d\n", n.ID, n.Port)
 	fmt.Printf("⛏️  Miner wallet: %s\n", n.Miner.Address)
 
@@ -136,8 +133,9 @@ func (n *Node) handleBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n.mutex.RLock()
+	defer n.mutex.RUnlock()
+
 	balance := n.Blockchain.GetBalance(address)
-	n.mutex.RUnlock()
 
 	response := map[string]interface{}{
 		"address": address,
@@ -282,14 +280,12 @@ func (n *Node) handleMine(w http.ResponseWriter, r *http.Request) {
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 
-	if len(n.Blockchain.PendingTransactions) == 0 {
-		http.Error(w, "No pending transactions to mine", http.StatusBadRequest)
-		return
-	}
-
 	fmt.Printf("💎 Node %s: Mining new block...\n", n.ID)
 	block := n.Miner.Mine(n.Blockchain)
-	n.Blockchain.SubmitBlock(block)
+	if err := n.Blockchain.SubmitBlock(block); err != nil {
+		http.Error(w, fmt.Sprintf("Failed to submit block: %v", err), http.StatusInternalServerError)
+		return
+	}
 
 	fmt.Printf("📡 Broadcasting mined block #%d to peers...\n", block.Index)
 	go n.broadcastToPeers("/block/broadcast", block)

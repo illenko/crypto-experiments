@@ -18,7 +18,7 @@ func NewClient(nodeAddress string) *Client {
 	return &Client{
 		NodeAddress: nodeAddress,
 		HTTPClient: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 	}
 }

@@ -8,25 +8,7 @@ import (
 )
 
 func main() {
-	var (
-		nodeMode   = flag.Bool("node", false, "Run as blockchain node")
-		clientMode = flag.Bool("client", false, "Run as client")
-		port       = flag.Int("port", 8080, "Port for node to listen on")
-		peers      = flag.String("peers", "", "Comma-separated list of peer addresses")
-		demo       = flag.Bool("demo", false, "Run original demo mode")
-	)
-	flag.Parse()
-
-	if *demo {
-		runDemo()
-		return
-	}
-
-	if *nodeMode && *clientMode {
-		log.Fatal("❌ Cannot run as both node and client")
-	}
-
-	if !*nodeMode && !*clientMode {
+	if len(os.Args) < 2 {
 		fmt.Println("🚀 Blockchain Go - P2P Network")
 		fmt.Println("Usage:")
 		fmt.Println("  --demo           Run original demo")
@@ -37,10 +19,31 @@ func main() {
 		os.Exit(0)
 	}
 
-	if *nodeMode {
+	switch os.Args[1] {
+	case "--demo":
+		runDemo()
+	case "--node":
+		nodeFlags := flag.NewFlagSet("node", flag.ExitOnError)
+		port := nodeFlags.Int("port", 8080, "Port for node to listen on")
+		peers := nodeFlags.String("peers", "", "Comma-separated list of peer addresses")
+		
+		if len(os.Args) > 2 {
+			if err := nodeFlags.Parse(os.Args[2:]); err != nil {
+				log.Fatal("❌ Failed to parse node flags:", err)
+			}
+		}
 		runNode(*port, *peers)
-	} else if *clientMode {
+	case "--client":
 		runClient()
+	default:
+		fmt.Println("🚀 Blockchain Go - P2P Network")
+		fmt.Println("Usage:")
+		fmt.Println("  --demo           Run original demo")
+		fmt.Println("  --node           Run as blockchain node")
+		fmt.Println("  --client         Run as client")
+		fmt.Println("  --port <port>    Port for node (default: 8080)")
+		fmt.Println("  --peers <peers>  Comma-separated peer addresses")
+		os.Exit(1)
 	}
 }
 
@@ -134,17 +137,20 @@ func runNode(port int, peers string) {
 }
 
 func runClient() {
-	var (
-		nodeAddr = flag.String("node-addr", "localhost:8080", "Address of the blockchain node")
-		command  = flag.String("cmd", "", "Command to execute: balance, send, mine, status")
-		address  = flag.String("address", "", "Wallet address")
-		to       = flag.String("to", "", "Recipient address")
-		amount   = flag.Float64("amount", 0, "Amount to send")
-		fee      = flag.Float64("fee", 0.01, "Transaction fee")
-	)
+	clientFlags := flag.NewFlagSet("client", flag.ExitOnError)
+	
+	nodeAddr := clientFlags.String("node-addr", "localhost:8080", "Address of the blockchain node")
+	command := clientFlags.String("cmd", "", "Command to execute: balance, send, mine, status")
+	address := clientFlags.String("address", "", "Wallet address")
+	to := clientFlags.String("to", "", "Recipient address")
+	amount := clientFlags.Float64("amount", 0, "Amount to send")
+	fee := clientFlags.Float64("fee", 0.01, "Transaction fee")
 
+	// Parse remaining arguments after --client
 	if len(os.Args) > 2 {
-		flag.CommandLine.Parse(os.Args[2:])
+		if err := clientFlags.Parse(os.Args[2:]); err != nil {
+			log.Fatal("❌ Failed to parse client flags:", err)
+		}
 	}
 
 	fmt.Printf("💻 Blockchain Client - connecting to %s\n", *nodeAddr)

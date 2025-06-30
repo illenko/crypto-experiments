@@ -111,8 +111,10 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Proper genesis block with coinbase transaction**
 - **Transaction fees with miner collection**
 
+- **Balance calculation from UTXOs with GetBalance method**
+
 **🚧 Remaining Work:**
-- Balance calculation from UTXOs
+- Advanced wallet management and key storage
 
 ### UTXO Consistency Guarantees
 
@@ -199,12 +201,12 @@ This is a basic blockchain implementation in Go consisting of several core compo
 ## Next Steps for Development
 
 ### High Priority (Features & Usability)
-1. **Balance Calculation** - Replace manual UTXO management with:
-   - `GetBalance(address)` method that sums UTXOs
-   - Better transaction creation with automatic UTXO selection
+1. **Blockchain Synchronization** - Implement longest chain consensus mechanism
+2. **Advanced Wallet Management** - Persistent key storage and wallet file support
 
 ### Low Priority (Advanced Features)
 1. **Transaction Pool Management** - Better pending transaction handling
 2. **Dynamic Difficulty** - Adjust mining difficulty based on block time
+3. **Persistent Storage** - Save blockchain state across restarts
 
 The codebase follows Go conventions with structured logging using emojis for user-friendly output.
