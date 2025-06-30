@@ -136,7 +136,7 @@ func (n *Node) handleBalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n.mutex.RLock()
-	balance := n.calculateBalance(address)
+	balance := n.Blockchain.GetBalance(address)
 	n.mutex.RUnlock()
 
 	response := map[string]interface{}{
@@ -146,15 +146,6 @@ func (n *Node) handleBalance(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
-}
-
-func (n *Node) calculateBalance(address string) float64 {
-	balance := 0.0
-	utxos := n.Blockchain.UTXOSet[address]
-	for _, utxo := range utxos {
-		balance += utxo.Output.Value
-	}
-	return balance
 }
 
 func (n *Node) handleTransaction(w http.ResponseWriter, r *http.Request) {

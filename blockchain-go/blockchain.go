@@ -371,3 +371,12 @@ func (b *Blockchain) LastBlock() *Block {
 	}
 	return b.Chain[len(b.Chain)-1]
 }
+
+func (b *Blockchain) GetBalance(address string) float64 {
+	balance := 0.0
+	utxos := b.FindUTXO(address)
+	for _, utxo := range utxos {
+		balance += utxo.Output.Value
+	}
+	return balance
+}
