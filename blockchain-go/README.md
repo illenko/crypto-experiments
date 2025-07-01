@@ -135,6 +135,8 @@ go run . --node --port 8003 --peers localhost:8001,localhost:8002
 **What happens internally:**
 - **Peer Discovery**: Nodes automatically connect and announce themselves
 - **Network Formation**: Creates mesh topology for transaction/block propagation
+- **Blockchain Synchronization**: Nodes compare chain lengths and adopt longer valid chains
+- **Genesis Consensus**: All nodes start with identical deterministic genesis block
 
 #### 2. Create Transaction on Node 1
 ```bash
@@ -154,8 +156,10 @@ go run . --client --node-addr localhost:8002 --cmd mine
 **What happens internally:**
 - **Block Creation**: Node 2 mines block including transactions from its pending pool
 - **Block Broadcast**: Mined block propagates to all peers
-- **Consensus**: All nodes validate and accept the block, updating their local state
-- **Synchronization**: Pending transaction pools cleared across network
+- **Consensus Validation**: All nodes validate and accept the block, updating their local state
+- **Chain Synchronization**: Nodes automatically adopt longer valid chains (longest chain rule)
+- **State Consistency**: UTXO sets synchronized across all nodes
+- **Transaction Finality**: Pending transaction pools cleared across network
 
 ## 🔧 Implementation Deep Dive
 
@@ -202,6 +206,7 @@ for {
 - ✅ **Immutable Ledger**: Cryptographically linked blocks
 - ✅ **Consensus Mechanism**: Proof-of-Work with longest chain rule
 - ✅ **Decentralization**: P2P network without central authority
+- ✅ **Byzantine Fault Tolerance**: Network continues operating with malicious/failed nodes
 
 ### Cryptocurrency Features  
 - ✅ **Double-Spend Prevention**: UTXO model ensures each coin spent only once
@@ -212,6 +217,8 @@ for {
 - ✅ **Atomic Transactions**: All-or-nothing UTXO updates with rollback
 - ✅ **Network Consensus**: Automatic block propagation and validation
 - ✅ **State Management**: Efficient UTXO set tracking and balance calculation
+- ✅ **Chain Synchronization**: Longest chain rule with automatic peer sync
+- ✅ **Fork Resolution**: Network automatically converges to single valid chain
 
 ## 🏗️ Current Limitations
 

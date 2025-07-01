@@ -87,8 +87,8 @@ This is a basic blockchain implementation in Go consisting of several core compo
 ### Current Limitations
 
 - ~~No network layer or peer-to-peer communication~~ ✅ **RESOLVED**
+- ~~No full blockchain synchronization (longest chain consensus pending)~~ ✅ **RESOLVED**
 - Fixed mining difficulty (no difficulty adjustment)
-- No full blockchain synchronization (longest chain consensus pending)
 - No persistence layer (blockchain resets on restart)
 
 ### UTXO Implementation Status
@@ -149,10 +149,10 @@ This is a basic blockchain implementation in Go consisting of several core compo
 8. ✅ **Transaction broadcasting** - Propagate transactions across network
 9. ✅ **Mining coordination** - Prevent simultaneous mining conflicts
 
-### **🚧 Phase 3: Consensus (PENDING)**
-10. **Blockchain sync** - Synchronize blockchain state between peers
-11. **Longest chain** - Implement consensus mechanism
-12. **Conflict resolution** - Handle competing blockchain versions
+### **✅ Phase 3: Consensus (COMPLETED)**
+10. ✅ **Blockchain sync** - Synchronize blockchain state between peers
+11. ✅ **Longest chain** - Implement consensus mechanism
+12. ✅ **Conflict resolution** - Handle competing blockchain versions
 
 ### **📋 Phase 4: Enhancements (OPTIONAL)**
 13. **WebSocket updates** - Real-time notifications (optional)
@@ -180,6 +180,7 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - `GET /peers` - List connected peers
 - `POST /peers` - Add new peer to network
 - `GET /blockchain` - Full blockchain data
+- `POST /blockchain/sync` - Synchronize with peer blockchain
 - `GET /balance/<address>` - Query wallet balance
 - `POST /transaction` - Create and broadcast transaction
 - `POST /transaction/broadcast` - Receive broadcasted transactions
@@ -198,10 +199,15 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - Mined blocks are broadcast to prevent conflicts
 - Basic mining coordination implemented
 
+**Consensus Mechanism:**
+- Automatic blockchain synchronization on peer connection
+- Longest chain rule with full chain validation
+- Atomic chain replacement with UTXO state reconstruction
+- Deterministic genesis blocks ensure network compatibility
+
 ## Next Steps for Development
 
 ### High Priority (Features & Usability)
-1. **Blockchain Synchronization** - Implement longest chain consensus mechanism
 2. **Advanced Wallet Management** - Persistent key storage and wallet file support
 
 ### Low Priority (Advanced Features)

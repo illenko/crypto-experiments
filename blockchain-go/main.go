@@ -26,7 +26,7 @@ func main() {
 		nodeFlags := flag.NewFlagSet("node", flag.ExitOnError)
 		port := nodeFlags.Int("port", 8080, "Port for node to listen on")
 		peers := nodeFlags.String("peers", "", "Comma-separated list of peer addresses")
-		
+
 		if len(os.Args) > 2 {
 			if err := nodeFlags.Parse(os.Args[2:]); err != nil {
 				log.Fatal("❌ Failed to parse node flags:", err)
@@ -138,7 +138,7 @@ func runNode(port int, peers string) {
 
 func runClient() {
 	clientFlags := flag.NewFlagSet("client", flag.ExitOnError)
-	
+
 	nodeAddr := clientFlags.String("node-addr", "localhost:8080", "Address of the blockchain node")
 	command := clientFlags.String("cmd", "", "Command to execute: balance, send, mine, status")
 	address := clientFlags.String("address", "", "Wallet address")

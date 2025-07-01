@@ -79,6 +79,7 @@ func (n *Node) setupRoutes() {
 	http.HandleFunc("/health", n.handleHealth)
 	http.HandleFunc("/status", n.handleStatus)
 	http.HandleFunc("/blockchain", n.handleBlockchain)
+	http.HandleFunc("/blockchain/sync", n.handleBlockchainSync)
 	http.HandleFunc("/balance/", n.handleBalance)
 	http.HandleFunc("/transaction", n.handleTransaction)
 	http.HandleFunc("/transaction/broadcast", n.handleTransactionBroadcast)
@@ -377,13 +378,13 @@ func (n *Node) connectToPeer(peerAddress string) {
 	if resp.StatusCode == http.StatusOK {
 		fmt.Printf("✅ Successfully connected to peer: %s\n", peerAddress)
 
-		n.announceTopeer(peerAddress)
+		n.announceToPeer(peerAddress)
 	} else {
 		fmt.Printf("⚠️ Peer %s responded with status: %d\n", peerAddress, resp.StatusCode)
 	}
 }
 
-func (n *Node) announceTopeer(peerAddress string) {
+func (n *Node) announceToPeer(peerAddress string) {
 	myAddress := fmt.Sprintf("localhost:%d", n.Port)
 
 	announcement := map[string]string{
@@ -404,6 +405,104 @@ func (n *Node) announceTopeer(peerAddress string) {
 
 	if resp.StatusCode == http.StatusOK {
 		fmt.Printf("📢 Successfully announced to peer: %s\n", peerAddress)
+
+		go n.syncWithPeer(peerAddress)
+	}
+}
+
+func (n *Node) handleBlockchainSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST method required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var peerChain Blockchain
+	if err := json.NewDecoder(r.Body).Decode(&peerChain); err != nil {
+		http.Error(w, "Invalid blockchain JSON", http.StatusBadRequest)
+		return
+	}
+
+	n.mutex.Lock()
+	defer n.mutex.Unlock()
+
+	if peerChain.IsLongerThan(n.Blockchain) && peerChain.IsValidChain() {
+		fmt.Printf("🔄 Received longer valid chain (%d blocks vs %d), attempting to replace...\n",
+			len(peerChain.Chain), len(n.Blockchain.Chain))
+
+		if err := n.Blockchain.ReplaceChain(&peerChain); err != nil {
+			fmt.Printf("❌ Failed to replace chain: %v\n", err)
+			http.Error(w, "Chain replacement failed", http.StatusBadRequest)
+			return
+		}
+
+		response := map[string]interface{}{
+			"status":    "chain_replaced",
+			"message":   "Blockchain updated with longer chain",
+			"newLength": len(n.Blockchain.Chain),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		response := map[string]interface{}{
+			"status":        "chain_not_replaced",
+			"message":       "Current chain is longer or peer chain is invalid",
+			"currentLength": len(n.Blockchain.Chain),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func (n *Node) syncWithPeer(peerAddress string) {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	url := fmt.Sprintf("http://%s/blockchain", peerAddress)
+	resp, err := client.Get(url)
+	if err != nil {
+		fmt.Printf("⚠️ Failed to get blockchain from peer %s: %v\n", peerAddress, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("⚠️ Peer %s returned status %d for blockchain request\n", peerAddress, resp.StatusCode)
+		return
+	}
+
+	var peerChain Blockchain
+	if err := json.NewDecoder(resp.Body).Decode(&peerChain); err != nil {
+		fmt.Printf("⚠️ Failed to decode blockchain from peer %s: %v\n", peerAddress, err)
+		return
+	}
+
+	n.mutex.Lock()
+	peerLonger := peerChain.IsLongerThan(n.Blockchain)
+	currentLength := len(n.Blockchain.Chain)
+	peerLength := len(peerChain.Chain)
+	n.mutex.Unlock()
+
+	if peerLonger {
+		fmt.Printf("🔍 Peer %s has longer chain (%d vs %d), requesting sync...\n",
+			peerAddress, peerLength, currentLength)
+
+		jsonData, _ := json.Marshal(peerChain)
+		syncURL := fmt.Sprintf("http://localhost:%d/blockchain/sync", n.Port)
+
+		syncResp, err := client.Post(syncURL, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			fmt.Printf("⚠️ Failed to sync with peer chain: %v\n", err)
+			return
+		}
+		defer syncResp.Body.Close()
+
+		if syncResp.StatusCode == http.StatusOK {
+			fmt.Printf("🔄 Successfully synced with peer %s\n", peerAddress)
+		}
+	} else {
+		fmt.Printf("ℹ️ Peer %s has same or shorter chain (%d vs %d)\n",
+			peerAddress, peerLength, currentLength)
 	}
 }
 

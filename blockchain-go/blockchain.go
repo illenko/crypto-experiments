@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 )
 
 type Blockchain struct {
@@ -34,7 +33,7 @@ func createGenesisBlock() *Block {
 
 	block := &Block{
 		Index:        0,
-		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Timestamp:    "2024-01-01T00:00:00Z",
 		Transactions: []*Transaction{genesisTx},
 		PreviousHash: strings.Repeat("0", 64),
 		Nonce:        0,
@@ -379,4 +378,64 @@ func (b *Blockchain) GetBalance(address string) float64 {
 		balance += utxo.Output.Value
 	}
 	return balance
+}
+
+func (b *Blockchain) IsLongerThan(other *Blockchain) bool {
+	return len(b.Chain) > len(other.Chain)
+}
+
+func (b *Blockchain) IsValidChain() bool {
+	for i := 1; i < len(b.Chain); i++ {
+		currentBlock := b.Chain[i]
+		previousBlock := b.Chain[i-1]
+
+		if !isValidProof(currentBlock) {
+			return false
+		}
+
+		if currentBlock.PreviousHash != previousBlock.Hash {
+			return false
+		}
+
+		if currentBlock.Index != previousBlock.Index+1 {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *Blockchain) ReplaceChain(newChain *Blockchain) error {
+	if !newChain.IsValidChain() {
+		return fmt.Errorf("invalid chain")
+	}
+
+	if !newChain.IsLongerThan(b) {
+		return fmt.Errorf("new chain is not longer")
+	}
+
+	utxoBackup := b.copyUTXOSet()
+
+	b.Chain = make([]*Block, len(newChain.Chain))
+	copy(b.Chain, newChain.Chain)
+
+	b.UTXOSet = make(map[string][]*UTXO)
+
+	for _, block := range b.Chain {
+		if err := b.validateTransactions(block); err != nil {
+			b.Chain = make([]*Block, 0)
+			b.UTXOSet = utxoBackup
+			return fmt.Errorf("chain validation failed: %v", err)
+		}
+
+		if err := b.applyUTXOChanges(block); err != nil {
+			b.Chain = make([]*Block, 0)
+			b.UTXOSet = utxoBackup
+			return fmt.Errorf("UTXO application failed: %v", err)
+		}
+	}
+
+	b.PendingTransactions = make([]*Transaction, 0)
+
+	fmt.Printf("🔄 Blockchain replaced with longer chain (%d blocks)\n", len(b.Chain))
+	return nil
 }
