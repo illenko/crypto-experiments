@@ -12,17 +12,35 @@ type Blockchain struct {
 	Chain               []*Block           `json:"chain"`
 	PendingTransactions []*Transaction     `json:"pendingTransactions"`
 	UTXOSet             map[string][]*UTXO `json:"utxoSet"`
+	DB                  BlockchainDB       `json:"-"` // Database interface
 }
 
-func NewBlockchain() *Blockchain {
+func NewBlockchain(db BlockchainDB) *Blockchain {
 	bc := &Blockchain{
 		Chain:               make([]*Block, 0),
 		PendingTransactions: make([]*Transaction, 0),
 		UTXOSet:             make(map[string][]*UTXO),
+		DB:                  db,
 	}
-	fmt.Println("🌱 Creating new blockchain...")
-	bc.Chain = append(bc.Chain, createGenesisBlock())
-	fmt.Println("⛓️ Genesis block created!")
+
+	fmt.Println("🌱 Creating blockchain...")
+
+	// Try to load existing blockchain from database
+	if bc.loadFromDatabase() {
+		fmt.Printf("📂 Loaded existing blockchain with %d blocks\n", len(bc.Chain))
+	} else {
+		// Create genesis block if no existing chain
+		fmt.Println("🌱 Creating new blockchain with genesis block...")
+		genesisBlock := createGenesisBlock()
+		bc.Chain = append(bc.Chain, genesisBlock)
+
+		// Initialize UTXO set with genesis transaction
+		bc.processGenesisBlock(genesisBlock)
+
+		// Save to database
+		bc.saveToDatabase()
+		fmt.Println("⛓️ Genesis block created and saved!")
+	}
 
 	return bc
 }
@@ -343,6 +361,14 @@ func (b *Blockchain) SubmitBlock(block *Block) error {
 	b.Chain = append(b.Chain, block)
 	b.PendingTransactions = make([]*Transaction, 0)
 
+	// Save block and updated state to database
+	if b.DB != nil {
+		if err := b.DB.SaveBlock(block); err != nil {
+			fmt.Printf("⚠️ Failed to save block to database: %v\n", err)
+		}
+		b.saveToDatabase()
+	}
+
 	fmt.Printf("✅ Block #%d accepted with hash: %s\n", block.Index, block.Hash[:8])
 	return nil
 }
@@ -437,5 +463,127 @@ func (b *Blockchain) ReplaceChain(newChain *Blockchain) error {
 	b.PendingTransactions = make([]*Transaction, 0)
 
 	fmt.Printf("🔄 Blockchain replaced with longer chain (%d blocks)\n", len(b.Chain))
+
+	// Save updated chain to database
+	if b.DB != nil {
+		b.saveToDatabase()
+	}
+
 	return nil
+}
+
+// Database persistence methods
+func (b *Blockchain) loadFromDatabase() bool {
+	if b.DB == nil {
+		return false
+	}
+
+	// Check if chain exists
+	height, err := b.DB.GetChainHeight()
+	if err != nil || height < 0 {
+		return false
+	}
+
+	// Load all blocks
+	for i := 0; i <= height; i++ {
+		block, err := b.DB.LoadBlock(i)
+		if err != nil {
+			fmt.Printf("❌ Failed to load block %d: %v\n", i, err)
+			return false
+		}
+		b.Chain = append(b.Chain, block)
+	}
+
+	// Load UTXO set
+	utxoSet, err := b.DB.LoadUTXOSet()
+	if err != nil {
+		fmt.Printf("⚠️ Failed to load UTXO set: %v\n", err)
+		// Rebuild UTXO set from blockchain if loading fails
+		b.rebuildUTXOSet()
+	} else {
+		b.UTXOSet = utxoSet
+	}
+
+	return true
+}
+
+func (b *Blockchain) saveToDatabase() {
+	if b.DB == nil {
+		return
+	}
+
+	// Save all blocks
+	for _, block := range b.Chain {
+		if err := b.DB.SaveBlock(block); err != nil {
+			fmt.Printf("❌ Failed to save block %d: %v\n", block.Index, err)
+		}
+	}
+
+	// Save chain height
+	if len(b.Chain) > 0 {
+		if err := b.DB.SaveMetadata("chain_height", len(b.Chain)-1); err != nil {
+			fmt.Printf("❌ Failed to save chain height: %v\n", err)
+		}
+	}
+
+	// Save UTXO set
+	if err := b.DB.SaveUTXOSet(b.UTXOSet); err != nil {
+		fmt.Printf("❌ Failed to save UTXO set: %v\n", err)
+	}
+}
+
+func (b *Blockchain) processGenesisBlock(genesisBlock *Block) {
+	// Initialize UTXO set with genesis transaction outputs
+	for _, tx := range genesisBlock.Transactions {
+		for index, output := range tx.Outputs {
+			utxo := &UTXO{
+				TxID:     tx.ID,
+				OutIndex: index,
+				Output:   output,
+			}
+			b.UTXOSet[output.Address] = append(b.UTXOSet[output.Address], utxo)
+		}
+	}
+}
+
+func (b *Blockchain) rebuildUTXOSet() {
+	fmt.Println("🔄 Rebuilding UTXO set from blockchain...")
+	b.UTXOSet = make(map[string][]*UTXO)
+
+	// Process all blocks to rebuild UTXO set
+	for _, block := range b.Chain {
+		for _, tx := range block.Transactions {
+			// Remove spent UTXOs (inputs)
+			for _, input := range tx.Inputs {
+				if input.TxID != "" { // Skip coinbase transactions
+					// Find and remove the spent UTXO from all addresses
+					for address, utxos := range b.UTXOSet {
+						for i, utxo := range utxos {
+							if utxo.TxID == input.TxID && utxo.OutIndex == input.OutIndex {
+								// Remove this UTXO
+								b.UTXOSet[address] = append(utxos[:i], utxos[i+1:]...)
+								if len(b.UTXOSet[address]) == 0 {
+									delete(b.UTXOSet, address)
+								}
+								goto nextInput // Break out of both loops
+							}
+						}
+					}
+				nextInput:
+				}
+			}
+
+			// Add new UTXOs (outputs)
+			for index, output := range tx.Outputs {
+				utxo := &UTXO{
+					TxID:     tx.ID,
+					OutIndex: index,
+					Output:   output,
+				}
+				b.UTXOSet[output.Address] = append(b.UTXOSet[output.Address], utxo)
+			}
+		}
+	}
+
+	fmt.Println("✅ UTXO set rebuilt successfully")
 }

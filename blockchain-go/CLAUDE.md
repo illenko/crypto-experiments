@@ -49,6 +49,7 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Base58** (`base58.go`): Bitcoin-compatible Base58 encoding/decoding for human-readable addresses
 - **Node** (`node.go`): P2P network node with HTTP API server, peer management, transaction/block broadcasting
 - **Client** (`client.go`): HTTP client for interacting with blockchain nodes via REST API
+- **Database** (`database.go`): BadgerDB persistence layer with per-node isolation and CRUD operations
 - **Main** (`main.go`): Command-line interface supporting demo, node, and client modes
 
 ### Key Architecture Patterns
@@ -88,8 +89,8 @@ This is a basic blockchain implementation in Go consisting of several core compo
 
 - ~~No network layer or peer-to-peer communication~~ ✅ **RESOLVED**
 - ~~No full blockchain synchronization (longest chain consensus pending)~~ ✅ **RESOLVED**
+- ~~No persistence layer (blockchain resets on restart)~~ ✅ **RESOLVED**
 - Fixed mining difficulty (no difficulty adjustment)
-- No persistence layer (blockchain resets on restart)
 
 ### UTXO Implementation Status
 
@@ -112,6 +113,9 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - **Transaction fees with miner collection**
 
 - **Balance calculation from UTXOs with GetBalance method**
+- **BadgerDB persistence layer** - Blocks, UTXO sets, and metadata persist across restarts
+- **Per-node database isolation** - Each node maintains separate database instance
+- **Graceful recovery** - UTXO set reconstruction from blockchain data
 
 **🚧 Remaining Work:**
 - Advanced wallet management and key storage
@@ -154,9 +158,15 @@ This is a basic blockchain implementation in Go consisting of several core compo
 11. ✅ **Longest chain** - Implement consensus mechanism
 12. ✅ **Conflict resolution** - Handle competing blockchain versions
 
-### **📋 Phase 4: Enhancements (OPTIONAL)**
-13. **WebSocket updates** - Real-time notifications (optional)
-14. **Persistent storage** - Save state across restarts (optional)
+### **✅ Phase 4: Persistence (COMPLETED)**
+13. ✅ **BadgerDB Integration** - Embedded NoSQL database for each node
+14. ✅ **Per-node isolation** - Separate databases by port (`./blockchain-data/node-{port}/badger/`)
+15. ✅ **Blockchain persistence** - Blocks, UTXO sets, and metadata survive restarts
+16. ✅ **Graceful recovery** - UTXO set reconstruction and error handling
+
+### **📋 Phase 5: Enhancements (OPTIONAL)**
+17. **WebSocket updates** - Real-time notifications (optional)
+18. **Advanced wallet management** - Persistent key storage and wallet file support
 
 ## Current P2P Implementation Status
 
@@ -205,14 +215,20 @@ This is a basic blockchain implementation in Go consisting of several core compo
 - Atomic chain replacement with UTXO state reconstruction
 - Deterministic genesis blocks ensure network compatibility
 
+**Persistence Layer:**
+- BadgerDB embedded NoSQL database for each node
+- Per-node database isolation: `./blockchain-data/node-{port}/badger/`
+- Automatic persistence of blocks, UTXO sets, and metadata
+- Graceful recovery with UTXO set reconstruction from blockchain
+- CLI flag: `--data-dir <dir>` for custom storage locations
+
 ## Next Steps for Development
 
 ### High Priority (Features & Usability)
-2. **Advanced Wallet Management** - Persistent key storage and wallet file support
+1. **Advanced Wallet Management** - Persistent key storage and wallet file support
 
 ### Low Priority (Advanced Features)
 1. **Transaction Pool Management** - Better pending transaction handling
 2. **Dynamic Difficulty** - Adjust mining difficulty based on block time
-3. **Persistent Storage** - Save blockchain state across restarts
 
 The codebase follows Go conventions with structured logging using emojis for user-friendly output.

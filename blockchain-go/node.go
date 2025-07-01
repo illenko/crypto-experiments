@@ -19,16 +19,24 @@ type Node struct {
 	Miner      *Miner
 	Peers      []string
 	Server     *http.Server
+	DB         *DatabaseManager
 	mutex      sync.RWMutex
 }
 
-func NewNode(port int, peers string) *Node {
+func NewNode(port int, peers string, dataDir string) *Node {
 	nodeID := fmt.Sprintf("node-%d", port)
+
+	// Initialize database first
+	db, err := NewDatabaseManager(dataDir, port)
+	if err != nil {
+		log.Fatalf("❌ Failed to initialize database: %v", err)
+	}
 
 	wallets := NewWallets()
 	minerWallet := wallets.CreateWallet()
 
-	blockchain := NewBlockchain()
+	// Pass database to blockchain
+	blockchain := NewBlockchain(db)
 	miner := NewMiner(minerWallet)
 
 	var peerList []string
@@ -46,9 +54,24 @@ func NewNode(port int, peers string) *Node {
 		Wallets:    wallets,
 		Miner:      miner,
 		Peers:      peerList,
+		DB:         db,
 	}
 
 	return node
+}
+
+func (n *Node) Shutdown() {
+	fmt.Printf("🔒 Shutting down node %s...\n", n.ID)
+
+	if n.DB != nil {
+		n.DB.Close()
+	}
+
+	if n.Server != nil {
+		n.Server.Close()
+	}
+
+	fmt.Printf("✅ Node %s shutdown complete\n", n.ID)
 }
 
 func (n *Node) Start() {

@@ -16,6 +16,7 @@ func main() {
 		fmt.Println("  --client         Run as client")
 		fmt.Println("  --port <port>    Port for node (default: 8080)")
 		fmt.Println("  --peers <peers>  Comma-separated peer addresses")
+		fmt.Println("  --data-dir <dir> Data directory for blockchain storage (default: ./blockchain-data)")
 		os.Exit(0)
 	}
 
@@ -26,13 +27,14 @@ func main() {
 		nodeFlags := flag.NewFlagSet("node", flag.ExitOnError)
 		port := nodeFlags.Int("port", 8080, "Port for node to listen on")
 		peers := nodeFlags.String("peers", "", "Comma-separated list of peer addresses")
+		dataDir := nodeFlags.String("data-dir", "./blockchain-data", "Data directory for blockchain storage")
 
 		if len(os.Args) > 2 {
 			if err := nodeFlags.Parse(os.Args[2:]); err != nil {
 				log.Fatal("❌ Failed to parse node flags:", err)
 			}
 		}
-		runNode(*port, *peers)
+		runNode(*port, *peers, *dataDir)
 	case "--client":
 		runClient()
 	default:
@@ -58,7 +60,7 @@ func runDemo() {
 	fmt.Printf("👤 Bob: %s\n", bobWallet)
 	fmt.Printf("⛏️  Miner: %s\n", minerWallet)
 
-	bc := NewBlockchain()
+	bc := NewBlockchain(nil) // Demo mode without persistence
 	miner := NewMiner(minerWallet)
 
 	fmt.Println("\n💎 Mining first block to create spendable coins...")
@@ -131,8 +133,9 @@ func runDemo() {
 	fmt.Println(bc)
 }
 
-func runNode(port int, peers string) {
-	node := NewNode(port, peers)
+func runNode(port int, peers string, dataDir string) {
+	node := NewNode(port, peers, dataDir)
+	defer node.Shutdown() // Ensure database is closed properly
 	node.Start()
 }
 
