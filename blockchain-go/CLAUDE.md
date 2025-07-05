@@ -232,3 +232,143 @@ This is a basic blockchain implementation in Go consisting of several core compo
 2. **Dynamic Difficulty** - Adjust mining difficulty based on block time
 
 The codebase follows Go conventions with structured logging using emojis for user-friendly output.
+
+## Ethereum-Like Implementation Plan
+
+### **🎯 Branch: ethereum-like-implementation**
+
+This plan outlines the transformation from the current Bitcoin-like UTXO blockchain to an Ethereum-like account-based system with smart contract capabilities.
+
+### **Phase 1: Account-Based Transaction Model (Week 1-2)**
+**Goal**: Replace UTXO model with account-based state management
+
+**Tasks:**
+1. **Account State Management**
+   - Create `Account` struct with `balance`, `nonce`, `codeHash`, `storageRoot`
+   - Replace `UTXOSet` with `AccountState` map[string]*Account
+   - Implement account creation and balance tracking
+   - Add nonce-based replay protection
+
+2. **Transaction Structure Updates**
+   - Replace `TxInput`/`TxOutput` with account-based fields:
+     - `from`, `to`, `value`, `gas`, `gasPrice`, `nonce`
+     - `data` field for contract calls/deployment
+   - Update transaction validation for account model
+   - Implement account balance checks
+
+3. **State Management**
+   - Design world state trie structure
+   - Implement state root calculation for blocks
+   - Add state transition functions
+   - Create state persistence layer
+
+### **Phase 2: Simple Virtual Machine (Week 3-4)**
+**Goal**: Build basic execution environment for smart contracts
+
+**Tasks:**
+1. **Basic VM Architecture**
+   - Create `SimpleVM` struct with stack, memory, storage
+   - Implement execution context with gas tracking
+   - Add program counter and instruction pointer
+   - Design simple instruction set
+
+2. **Core Opcodes Implementation**
+   - **Arithmetic**: ADD, SUB, MUL, DIV, MOD
+   - **Logic**: AND, OR, XOR, NOT, LT, GT, EQ
+   - **Memory**: LOAD, STORE, MLOAD, MSTORE
+   - **Stack**: PUSH, POP, DUP, SWAP
+   - **Control**: JUMP, JUMPI, PC, STOP
+   - **Environment**: ADDRESS, BALANCE, CALLER, CALLVALUE
+
+3. **Bytecode Execution Engine**
+   - Implement opcode dispatcher
+   - Add gas metering for each operation
+   - Handle execution errors and reverts
+   - Create execution result handling
+
+### **Phase 3: Smart Contract Support (Week 5-6)**
+**Goal**: Enable contract deployment and execution
+
+**Tasks:**
+1. **Contract Deployment**
+   - Support contract creation transactions (to = nil)
+   - Store contract bytecode in account state
+   - Implement contract address generation (CREATE opcode)
+   - Add constructor execution
+
+2. **Contract Execution**
+   - Execute contract code on CALL transactions
+   - Handle contract-to-contract calls
+   - Implement CALL, DELEGATECALL, STATICCALL opcodes
+   - Add return values and revert mechanisms
+
+3. **Contract Storage**
+   - Implement persistent contract storage
+   - Add SLOAD, SSTORE opcodes
+   - Handle storage state changes
+   - Add storage root calculation
+
+### **Phase 4: Gas System (Week 7)**
+**Goal**: Implement computational resource management
+
+**Tasks:**
+1. **Gas Mechanism**
+   - Define gas costs for different operations
+   - Implement gas limit and gas used tracking
+   - Add gas price mechanism for transaction fees
+   - Handle out-of-gas scenarios
+
+2. **Fee System Updates**
+   - Replace mining rewards with gas fees
+   - Implement fee collection for miners
+   - Add gas estimation for transactions
+   - Handle gas refunds for storage cleanup
+
+### **Phase 5: Enhanced Block Structure (Week 8)**
+**Goal**: Update blockchain structure for account-based model
+
+**Tasks:**
+1. **Block Structure Updates**
+   - Add `stateRoot`, `gasLimit`, `gasUsed` to blocks
+   - Implement transaction receipts
+   - Add logs and events system
+   - Update block validation logic
+
+2. **Enhanced Features**
+   - Add event logging and filtering
+   - Implement transaction receipts
+   - Add basic debugging tools
+   - Create development utilities
+
+### **Key Architecture Changes Summary**
+
+**From Bitcoin-like (UTXO) to Ethereum-like (Account-based):**
+
+| Component | Bitcoin-like (Current) | Ethereum-like (Target) |
+|-----------|----------------------|----------------------|
+| **State Model** | UTXO Set | Account State |
+| **Transactions** | Inputs/Outputs | From/To/Value/Gas |
+| **Execution** | Script validation | Virtual Machine |
+| **Smart Contracts** | None | Bytecode execution |
+| **Fees** | Simple fee | Gas system |
+| **Addresses** | Bitcoin-style | Ethereum-style |
+| **Block Structure** | Simple | StateRoot + Gas tracking |
+
+### **Implementation Guidelines**
+
+1. **Maintain Backward Compatibility**: Keep existing Bitcoin-like functionality as fallback
+2. **Incremental Development**: Each phase builds on previous phases
+3. **Testing Strategy**: Add comprehensive tests for each component
+4. **Documentation**: Update documentation as features are implemented
+5. **Performance**: Consider performance implications of state management
+
+### **Success Metrics**
+
+- [ ] Deploy and execute simple smart contracts
+- [ ] Handle account-based transactions
+- [ ] Implement gas metering and fees
+- [ ] Maintain blockchain consensus
+- [ ] Support contract-to-contract calls
+- [ ] Generate transaction receipts and logs
+
+This plan transforms the blockchain from a simple cryptocurrency to a programmable platform while maintaining the core networking and consensus mechanisms.
