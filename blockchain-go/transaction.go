@@ -228,3 +228,87 @@ func NewGenesisTransaction() *Transaction {
 
 	return tx
 }
+
+// ========================================
+// NEW: Ethereum-like Account-based Model
+// ========================================
+
+// Account represents an Ethereum-like account with balance, nonce, and contract data
+type Account struct {
+	Balance     *big.Int `json:"balance"`     // Account balance in wei (smallest unit)
+	Nonce       uint64   `json:"nonce"`       // Transaction counter for replay protection
+	CodeHash    string   `json:"codeHash"`    // Hash of contract code (empty for EOA)
+	StorageRoot string   `json:"storageRoot"` // Root of contract storage trie (empty for EOA)
+}
+
+// EthTransaction represents an Ethereum-like transaction
+type EthTransaction struct {
+	From     string   `json:"from"`     // Sender address
+	To       string   `json:"to"`       // Recipient address (empty for contract creation)
+	Value    *big.Int `json:"value"`    // Amount to transfer in wei
+	Gas      uint64   `json:"gas"`      // Gas limit
+	GasPrice *big.Int `json:"gasPrice"` // Gas price in wei
+	Nonce    uint64   `json:"nonce"`    // Sender's transaction nonce
+	Data     []byte   `json:"data"`     // Contract bytecode or call data
+	Hash     string   `json:"hash"`     // Transaction hash
+
+	// Signature fields (simplified for now)
+	V *big.Int `json:"v"` // Recovery ID
+	R *big.Int `json:"r"` // Signature R
+	S *big.Int `json:"s"` // Signature S
+}
+
+// NewEOA creates a new Externally Owned Account with initial balance
+func NewEOA(initialBalance *big.Int) *Account {
+	return &Account{
+		Balance:     new(big.Int).Set(initialBalance),
+		Nonce:       0,
+		CodeHash:    "", // Empty for EOA
+		StorageRoot: "", // Empty for EOA
+	}
+}
+
+// IsContract checks if account is a smart contract
+func (a *Account) IsContract() bool {
+	return a.CodeHash != ""
+}
+
+// GetAccountHash calculates hash of account for state root calculation
+func (a *Account) GetAccountHash() string {
+	accountBytes, _ := json.Marshal(a)
+	hash := sha256.Sum256(accountBytes)
+	return hex.EncodeToString(hash[:])
+}
+
+// CalculateEthHash calculates transaction hash for Ethereum-like transaction
+func (tx *EthTransaction) CalculateEthHash() string {
+	// Create copy without hash and signature for hashing
+	txCopy := EthTransaction{
+		From:     tx.From,
+		To:       tx.To,
+		Value:    new(big.Int).Set(tx.Value),
+		Gas:      tx.Gas,
+		GasPrice: new(big.Int).Set(tx.GasPrice),
+		Nonce:    tx.Nonce,
+		Data:     tx.Data,
+	}
+
+	txBytes, _ := json.Marshal(txCopy)
+	hash := sha256.Sum256(txBytes)
+	return hex.EncodeToString(hash[:])
+}
+
+// IsContractCreation checks if transaction creates a new contract
+func (tx *EthTransaction) IsContractCreation() bool {
+	return tx.To == ""
+}
+
+// CalculateFeeEth calculates transaction fee (gas * gasPrice)
+func (tx *EthTransaction) CalculateFeeEth() *big.Int {
+	return new(big.Int).Mul(new(big.Int).SetUint64(tx.Gas), tx.GasPrice)
+}
+
+// SetEthID sets the transaction hash
+func (tx *EthTransaction) SetEthID() {
+	tx.Hash = tx.CalculateEthHash()
+}

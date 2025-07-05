@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math/big"
 	"os"
 )
 
@@ -11,7 +12,8 @@ func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("🚀 Blockchain Go - P2P Network")
 		fmt.Println("Usage:")
-		fmt.Println("  --demo           Run original demo")
+		fmt.Println("  --demo           Run original UTXO demo")
+		fmt.Println("  --eth-demo       Run new Ethereum-like demo")
 		fmt.Println("  --node           Run as blockchain node")
 		fmt.Println("  --client         Run as client")
 		fmt.Println("  --port <port>    Port for node (default: 8080)")
@@ -23,6 +25,8 @@ func main() {
 	switch os.Args[1] {
 	case "--demo":
 		runDemo()
+	case "--eth-demo":
+		runEthDemo()
 	case "--node":
 		nodeFlags := flag.NewFlagSet("node", flag.ExitOnError)
 		port := nodeFlags.Int("port", 8080, "Port for node to listen on")
@@ -40,7 +44,8 @@ func main() {
 	default:
 		fmt.Println("🚀 Blockchain Go - P2P Network")
 		fmt.Println("Usage:")
-		fmt.Println("  --demo           Run original demo")
+		fmt.Println("  --demo           Run original UTXO demo")
+		fmt.Println("  --eth-demo       Run new Ethereum-like demo")
 		fmt.Println("  --node           Run as blockchain node")
 		fmt.Println("  --client         Run as client")
 		fmt.Println("  --port <port>    Port for node (default: 8080)")
@@ -190,4 +195,125 @@ func runClient() {
 	default:
 		fmt.Printf("❌ Unknown command: %s\n", *command)
 	}
+}
+
+// runEthDemo demonstrates the new Ethereum-like account-based blockchain
+func runEthDemo() {
+	fmt.Println("🚀 Ethereum-like Account-Based Blockchain Demo")
+	fmt.Println("==============================================")
+
+	// Create blockchain with Ethereum-like features
+	bc := NewBlockchain(nil) // Demo mode without persistence
+
+	// Initialize some accounts for testing
+	alice := "0x1234567890123456789012345678901234567890"
+	bob := "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+	miner := "0x9876543210987654321098765432109876543210"
+
+	fmt.Printf("👤 Alice: %s\n", alice)
+	fmt.Printf("👤 Bob: %s\n", bob)
+	fmt.Printf("⛏️  Miner: %s\n", miner)
+
+	// Give Alice some initial balance (100 ETH in wei)
+	initialBalance := new(big.Int).Mul(big.NewInt(100), big.NewInt(1e18))
+	bc.WorldState.AddToBalance(alice, initialBalance)
+
+	fmt.Printf("\n💰 Alice initial balance: %s wei (100 ETH)\n",
+		bc.GetEthBalance(alice).String())
+	fmt.Printf("💰 Bob initial balance: %s wei\n",
+		bc.GetEthBalance(bob).String())
+	fmt.Printf("💰 Miner initial balance: %s wei\n",
+		bc.GetEthBalance(miner).String())
+
+	// Create a transaction from Alice to Bob
+	value := new(big.Int).Mul(big.NewInt(5), big.NewInt(1e18)) // 5 ETH in wei
+	gasPrice := big.NewInt(20e9)                               // 20 Gwei
+
+	fmt.Println("\n💸 Creating transaction from Alice to Bob...")
+	tx := bc.CreateEthTransaction(alice, bob, value, gasPrice)
+
+	if tx != nil {
+		fmt.Printf("✅ Transaction created successfully!\n")
+		fmt.Printf("   From: %s\n", tx.From)
+		fmt.Printf("   To: %s\n", tx.To)
+		fmt.Printf("   Value: %s wei (5 ETH)\n", tx.Value.String())
+		fmt.Printf("   Gas: %d\n", tx.Gas)
+		fmt.Printf("   Gas Price: %s wei (20 Gwei)\n", tx.GasPrice.String())
+		fmt.Printf("   Nonce: %d\n", tx.Nonce)
+		fmt.Printf("   Fee: %s wei\n", tx.CalculateFeeEth().String())
+		fmt.Printf("   Hash: %s\n", tx.Hash)
+
+		// Execute the transaction
+		fmt.Println("\n⚡ Executing transaction...")
+		if err := bc.ExecuteEthTransaction(tx, miner); err != nil {
+			fmt.Printf("❌ Transaction execution failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Transaction executed successfully!")
+
+			// Show updated balances
+			fmt.Println("\n💰 Updated balances:")
+			fmt.Printf("   Alice: %s wei\n", bc.GetEthBalance(alice).String())
+			fmt.Printf("   Bob: %s wei\n", bc.GetEthBalance(bob).String())
+			fmt.Printf("   Miner: %s wei\n", bc.GetEthBalance(miner).String())
+
+			// Show account states
+			fmt.Println("\n🏦 Account states:")
+			aliceAccount := bc.WorldState.GetAccount(alice)
+			bobAccount := bc.WorldState.GetAccount(bob)
+			minerAccount := bc.WorldState.GetAccount(miner)
+
+			fmt.Printf("   Alice - Balance: %s, Nonce: %d\n",
+				aliceAccount.Balance.String(), aliceAccount.Nonce)
+			fmt.Printf("   Bob - Balance: %s, Nonce: %d\n",
+				bobAccount.Balance.String(), bobAccount.Nonce)
+			fmt.Printf("   Miner - Balance: %s, Nonce: %d\n",
+				minerAccount.Balance.String(), minerAccount.Nonce)
+
+			// Show world state root
+			fmt.Printf("\n🌍 World State Root: %s\n", bc.WorldState.StateRoot)
+		}
+	}
+
+	// Try another transaction from Alice to Bob with higher nonce
+	fmt.Println("\n💸 Creating second transaction from Alice to Bob...")
+	value2 := new(big.Int).Mul(big.NewInt(3), big.NewInt(1e18)) // 3 ETH in wei
+	tx2 := bc.CreateEthTransaction(alice, bob, value2, gasPrice)
+
+	if tx2 != nil {
+		fmt.Printf("✅ Second transaction created!\n")
+		fmt.Printf("   Value: %s wei (3 ETH)\n", tx2.Value.String())
+		fmt.Printf("   Nonce: %d (incremented)\n", tx2.Nonce)
+
+		// Execute the second transaction
+		fmt.Println("\n⚡ Executing second transaction...")
+		if err := bc.ExecuteEthTransaction(tx2, miner); err != nil {
+			fmt.Printf("❌ Second transaction execution failed: %v\n", err)
+		} else {
+			fmt.Println("✅ Second transaction executed successfully!")
+
+			// Show final balances
+			fmt.Println("\n💰 Final balances:")
+			fmt.Printf("   Alice: %s wei\n", bc.GetEthBalance(alice).String())
+			fmt.Printf("   Bob: %s wei\n", bc.GetEthBalance(bob).String())
+			fmt.Printf("   Miner: %s wei\n", bc.GetEthBalance(miner).String())
+
+			// Convert to ETH for readability
+			aliceEth := new(big.Float).Quo(new(big.Float).SetInt(bc.GetEthBalance(alice)), big.NewFloat(1e18))
+			bobEth := new(big.Float).Quo(new(big.Float).SetInt(bc.GetEthBalance(bob)), big.NewFloat(1e18))
+			minerEth := new(big.Float).Quo(new(big.Float).SetInt(bc.GetEthBalance(miner)), big.NewFloat(1e18))
+
+			fmt.Println("\n💰 Final balances in ETH:")
+			fmt.Printf("   Alice: %s ETH\n", aliceEth.Text('f', 6))
+			fmt.Printf("   Bob: %s ETH\n", bobEth.Text('f', 6))
+			fmt.Printf("   Miner: %s ETH\n", minerEth.Text('f', 6))
+		}
+	}
+
+	fmt.Println("\n🎉 Ethereum-like demo completed!")
+	fmt.Println("Key differences from UTXO model:")
+	fmt.Println("✓ Account-based state management")
+	fmt.Println("✓ Nonce-based replay protection")
+	fmt.Println("✓ Gas-based fee system")
+	fmt.Println("✓ World state root for verification")
+	fmt.Println("✓ Direct balance modifications")
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"sort"
 	"strings"
 )
 
@@ -12,7 +14,12 @@ type Blockchain struct {
 	Chain               []*Block           `json:"chain"`
 	PendingTransactions []*Transaction     `json:"pendingTransactions"`
 	UTXOSet             map[string][]*UTXO `json:"utxoSet"`
-	DB                  BlockchainDB       `json:"-"` // Database interface
+
+	// NEW: Ethereum-like account-based state
+	WorldState      *WorldState       `json:"worldState"`
+	EthTransactions []*EthTransaction `json:"ethTransactions"`
+
+	DB BlockchainDB `json:"-"` // Database interface
 }
 
 func NewBlockchain(db BlockchainDB) *Blockchain {
@@ -20,7 +27,12 @@ func NewBlockchain(db BlockchainDB) *Blockchain {
 		Chain:               make([]*Block, 0),
 		PendingTransactions: make([]*Transaction, 0),
 		UTXOSet:             make(map[string][]*UTXO),
-		DB:                  db,
+
+		// NEW: Initialize Ethereum-like state
+		WorldState:      NewWorldState(),
+		EthTransactions: make([]*EthTransaction, 0),
+
+		DB: db,
 	}
 
 	fmt.Println("🌱 Creating blockchain...")
@@ -586,4 +598,226 @@ func (b *Blockchain) rebuildUTXOSet() {
 	}
 
 	fmt.Println("✅ UTXO set rebuilt successfully")
+}
+
+// ========================================
+// NEW: Ethereum-like World State Management
+// ========================================
+
+// WorldState manages all account states in Ethereum-like model
+type WorldState struct {
+	Accounts  map[string]*Account `json:"accounts"`  // address -> Account
+	StateRoot string              `json:"stateRoot"` // Merkle root of all accounts
+}
+
+// NewWorldState creates a new world state
+func NewWorldState() *WorldState {
+	return &WorldState{
+		Accounts:  make(map[string]*Account),
+		StateRoot: "",
+	}
+}
+
+// GetAccount retrieves account by address (creates if doesn't exist)
+func (ws *WorldState) GetAccount(address string) *Account {
+	if account, exists := ws.Accounts[address]; exists {
+		return account
+	}
+
+	// Create new EOA with zero balance
+	account := NewEOA(big.NewInt(0))
+	ws.Accounts[address] = account
+	return account
+}
+
+// SetAccount updates account and recalculates state root
+func (ws *WorldState) SetAccount(address string, account *Account) {
+	ws.Accounts[address] = account
+	ws.UpdateStateRoot()
+}
+
+// UpdateStateRoot calculates state root from all accounts
+func (ws *WorldState) UpdateStateRoot() {
+	if len(ws.Accounts) == 0 {
+		ws.StateRoot = strings.Repeat("0", 64) // Zero hash
+		return
+	}
+
+	// Sort addresses for deterministic hash
+	addresses := make([]string, 0, len(ws.Accounts))
+	for addr := range ws.Accounts {
+		addresses = append(addresses, addr)
+	}
+	sort.Strings(addresses)
+
+	// Concatenate all account hashes
+	var allHashes string
+	for _, addr := range addresses {
+		allHashes += addr + ws.Accounts[addr].GetAccountHash()
+	}
+
+	hash := sha256.Sum256([]byte(allHashes))
+	ws.StateRoot = hex.EncodeToString(hash[:])
+}
+
+// GetBalance returns account balance
+func (ws *WorldState) GetBalance(address string) *big.Int {
+	account := ws.GetAccount(address)
+	return new(big.Int).Set(account.Balance) // Return copy
+}
+
+// Transfer value between accounts
+func (ws *WorldState) Transfer(from, to string, amount *big.Int) error {
+	fromAccount := ws.GetAccount(from)
+	toAccount := ws.GetAccount(to)
+
+	// Check sufficient balance
+	if fromAccount.Balance.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient balance: have %s, need %s",
+			fromAccount.Balance.String(), amount.String())
+	}
+
+	// Perform transfer
+	fromAccount.Balance.Sub(fromAccount.Balance, amount)
+	toAccount.Balance.Add(toAccount.Balance, amount)
+
+	// Update state root
+	ws.UpdateStateRoot()
+	return nil
+}
+
+// AddToBalance adds amount to account balance
+func (ws *WorldState) AddToBalance(address string, amount *big.Int) {
+	account := ws.GetAccount(address)
+	account.Balance.Add(account.Balance, amount)
+	ws.UpdateStateRoot()
+}
+
+// SubFromBalance subtracts amount from account balance
+func (ws *WorldState) SubFromBalance(address string, amount *big.Int) error {
+	account := ws.GetAccount(address)
+	if account.Balance.Cmp(amount) < 0 {
+		return fmt.Errorf("insufficient balance: have %s, need %s",
+			account.Balance.String(), amount.String())
+	}
+	account.Balance.Sub(account.Balance, amount)
+	ws.UpdateStateRoot()
+	return nil
+}
+
+// IncrementNonce increments account nonce
+func (ws *WorldState) IncrementNonce(address string) {
+	account := ws.GetAccount(address)
+	account.Nonce++
+	ws.UpdateStateRoot()
+}
+
+// GetNonce returns account nonce
+func (ws *WorldState) GetNonce(address string) uint64 {
+	account := ws.GetAccount(address)
+	return account.Nonce
+}
+
+// ========================================
+// NEW: Ethereum-like Transaction Methods
+// ========================================
+
+// CreateEthTransaction creates a new Ethereum-like transaction
+func (bc *Blockchain) CreateEthTransaction(from, to string, value *big.Int, gasPrice *big.Int) *EthTransaction {
+	senderAccount := bc.WorldState.GetAccount(from)
+
+	tx := &EthTransaction{
+		From:     from,
+		To:       to,
+		Value:    new(big.Int).Set(value),
+		Gas:      21000, // Standard gas limit for simple transfer
+		GasPrice: new(big.Int).Set(gasPrice),
+		Nonce:    senderAccount.Nonce,
+		Data:     []byte{}, // Empty for simple transfer
+	}
+
+	tx.SetEthID()
+	bc.EthTransactions = append(bc.EthTransactions, tx)
+
+	fmt.Printf("💸 New Eth transaction: %s -> %s: %s wei + %s gas fee (ID: %s)\n",
+		from, to, value.String(), tx.CalculateFeeEth().String(), tx.Hash[:8])
+
+	return tx
+}
+
+// ValidateEthTransaction validates an Ethereum-like transaction
+func (bc *Blockchain) ValidateEthTransaction(tx *EthTransaction) error {
+	// 1. Check nonce
+	senderAccount := bc.WorldState.GetAccount(tx.From)
+	if tx.Nonce != senderAccount.Nonce {
+		return fmt.Errorf("invalid nonce: expected %d, got %d",
+			senderAccount.Nonce, tx.Nonce)
+	}
+
+	// 2. Check sufficient balance for value + fee
+	totalCost := new(big.Int).Add(tx.Value, tx.CalculateFeeEth())
+	if senderAccount.Balance.Cmp(totalCost) < 0 {
+		return fmt.Errorf("insufficient balance: have %s, need %s",
+			senderAccount.Balance.String(), totalCost.String())
+	}
+
+	// 3. Basic gas validation
+	if tx.Gas < 21000 { // Minimum gas for simple transfer
+		return fmt.Errorf("gas limit too low: minimum 21000, got %d", tx.Gas)
+	}
+
+	return nil
+}
+
+// ExecuteEthTransaction executes an Ethereum-like transaction
+func (bc *Blockchain) ExecuteEthTransaction(tx *EthTransaction, minerAddress string) error {
+	// 1. Validate transaction
+	if err := bc.ValidateEthTransaction(tx); err != nil {
+		return err
+	}
+
+	// 2. Calculate gas used (simplified - always use minimum for now)
+	gasUsed := uint64(21000)
+	actualFee := new(big.Int).Mul(new(big.Int).SetUint64(gasUsed), tx.GasPrice)
+
+	// 3. Deduct fee from sender, give to miner
+	if err := bc.WorldState.SubFromBalance(tx.From, actualFee); err != nil {
+		return err
+	}
+	bc.WorldState.AddToBalance(minerAddress, actualFee)
+
+	// 4. Transfer value (if not contract creation and value > 0)
+	if !tx.IsContractCreation() && tx.Value.Cmp(big.NewInt(0)) > 0 {
+		if err := bc.WorldState.Transfer(tx.From, tx.To, tx.Value); err != nil {
+			return err
+		}
+	}
+
+	// 5. Increment sender nonce
+	bc.WorldState.IncrementNonce(tx.From)
+
+	fmt.Printf("✅ Eth transaction executed: %s (gas used: %d)\n", tx.Hash[:8], gasUsed)
+	return nil
+}
+
+// GetEthBalance returns account balance in the Ethereum-like model
+func (bc *Blockchain) GetEthBalance(address string) *big.Int {
+	return bc.WorldState.GetBalance(address)
+}
+
+// InitializeEthAccounts sets up initial accounts with balances for testing
+func (bc *Blockchain) InitializeEthAccounts() {
+	// Create some initial accounts with balances for testing
+	initialBalance := new(big.Int).Mul(big.NewInt(100), big.NewInt(1e18)) // 100 ETH in wei
+
+	// You can add predefined addresses here for testing
+	testAddresses := []string{
+		"0x1234567890123456789012345678901234567890",
+		"0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+	}
+
+	for _, addr := range testAddresses {
+		bc.WorldState.AddToBalance(addr, new(big.Int).Set(initialBalance))
+		fmt.Printf("🎯 Initialized account %s with %s wei\n", addr, initialBalance.String())
+	}
 }
